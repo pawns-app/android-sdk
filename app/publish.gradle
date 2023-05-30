@@ -1,0 +1,22 @@
+apply plugin: 'maven-publish'
+
+task androidSourcesJar(type: Jar){
+    archiveClassifier.set('sources')
+    from android.sourceSets.main.java.srcDirs
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                groupId = 'com.iproyal.sdk'
+                artifactId = 'internet-sharing'
+                version = '1.0.0'
+
+                afterEvaluate {
+                    from components.release
+                }
+            }
+        }
+    }
+}

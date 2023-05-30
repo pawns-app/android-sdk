@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'com.kezong.fat-aar'
+    id 'org.jetbrains.dokka'
+}
+apply {
+    from 'publish.gradle'
+}
+
+android {
+    namespace 'com.iproyal.sdk'
+    compileSdk 33
+
+    defaultConfig {
+        minSdk 23
+        targetSdk 33
+
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    kotlinOptions {
+        freeCompilerArgs += '-Xexplicit-api=strict'
+    }
+}
+
+dependencies {
+    // Hack with plugin fat-aar-android https://github.com/kezong/fat-aar-android
+    embed project(path: ':pawns-core', configuration: 'default')
+
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:$serialization_version"
+    implementation "androidx.core:core-ktx:1.10.1"
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.1'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
