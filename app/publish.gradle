@@ -11,7 +11,7 @@ afterEvaluate {
             release(MavenPublication) {
                 groupId = 'com.iproyal.sdk'
                 artifactId = 'internet-sharing'
-                version = '1.0.0'
+                version = '1.0.0-beta01'
 
                 afterEvaluate {
                     from components.release
