@@ -145,10 +145,16 @@ internal class PeerService : Service() {
         PawnsLogger.d(TAG, ("Started sharing"))
         Mobile_sdk.startMainRoutine(Pawns.instance.apiKey) {
             val event = Pawns.instance.dependencyProvider.jsonInstance.decodeFromString(SdkEvent.serializer(), it)
-            val sdkError = when {
-                event.parameters?.error == SdkErrorType.UNAUTHORISED.sdkValue -> ServiceError.Unauthorised
-                !event.parameters?.error.isNullOrBlank() -> ServiceError.Unknown(event.parameters?.error)
-                else -> null
+            val sdkError: ServiceError? = when(event.parameters?.error) {
+                SdkErrorType.NO_FREE_PORT.sdkValue -> ServiceError.Critical("Unable to open port")
+                SdkErrorType.NON_RESIDENTIAL.sdkValue -> ServiceError.Critical("IP address is not suitable for internet sharing")
+                SdkErrorType.UNSUPPORTED.sdkValue -> ServiceError.Critical("Library version is too old and is no longer supported")
+                SdkErrorType.UNAUTHORISED.sdkValue -> ServiceError.Critical("ApiKey is incorrect or expired")
+                SdkErrorType.LOST_CONNECTION.sdkValue -> ServiceError.General("Lost connection")
+                SdkErrorType.IP_USED.sdkValue -> ServiceError.General("This IP is already in use")
+                SdkErrorType.PEER_ALIVE_FAILED.sdkValue -> ServiceError.General("Internal error")
+                null -> null
+                else -> ServiceError.Unknown(event.parameters.error)
             }
             val serviceState = when {
                 event.name == SdkLifeCycleName.STARTING.sdkValue -> ServiceState.On
@@ -156,7 +162,7 @@ internal class PeerService : Service() {
                 else -> ServiceState.Launched.Running
             }
             emitState(serviceState)
-            PawnsLogger.d(TAG, it)
+            PawnsLogger.d(TAG, "state: $serviceState error: $sdkError")
         }
     }
 
