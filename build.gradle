@@ -19,6 +19,10 @@ buildscript {
     }
 }
 
+configurations.all {
+    resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+}
+
 allprojects {
     repositories {
         google()
