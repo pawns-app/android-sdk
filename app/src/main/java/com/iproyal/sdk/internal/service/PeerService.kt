@@ -48,29 +48,12 @@ internal class PeerService : Service() {
     private var isSdkStarted = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        intent?.let {
-            PawnsLogger.d(TAG, "Action received ${it.action}")
-            when (it.action) {
-                ServiceAction.START_PAWNS_SERVICE.name -> {
-                    try {
-                        startForeground(
-                            NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
-                            Pawns.instance.dependencyProvider.notificationManager.createServiceNotification()
-                        )
-                        startService()
-                    } catch (e: Exception) {
-                        PawnsLogger.e(TAG, ("Failed to start foreground service $e"))
-                    }
-                }
-                ServiceAction.STOP_PAWNS_SERVICE.name -> {
-                    try {
-                        stopService()
-                    } catch (e: Exception) {
-                        PawnsLogger.e(TAG, ("Failed to stop foreground service $e"))
-                    }
-                }
-                else -> PawnsLogger.e(TAG, "Unknown action received, please use ServiceAction")
-            }
+        PawnsLogger.d(TAG, "Action received ${intent?.action}")
+        when (intent?.action) {
+            null -> startService()
+            ServiceAction.START_PAWNS_SERVICE.name -> startService()
+            ServiceAction.STOP_PAWNS_SERVICE.name -> stopService(startId)
+            else -> PawnsLogger.e(TAG, "Unknown action received, please use ServiceAction")
         }
         return START_STICKY
     }
@@ -81,6 +64,7 @@ internal class PeerService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        startService()
         try {
             startForeground(
                 NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
@@ -106,35 +90,43 @@ internal class PeerService : Service() {
 
     // Responsible for starting PeerService
     private fun startService() {
-        if (isServiceStarted) return
-        isServiceStarted = true
-        PawnsLogger.d(TAG, ("Started service"))
-        serviceScope.coroutineContext.cancelChildren()
-        emitState(ServiceState.On)
-        wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
-            newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG::lock").apply {
-                acquire()
-            }
-        }
-
-        serviceScope.launch {
-            while (isServiceStarted && isActive) {
-                val batteryManager: BatteryManager? = getSystemService(BATTERY_SERVICE) as? BatteryManager
-                val batteryLevel = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 100
-
-                val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-                val plugged = intent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
-                val isCharging = plugged == BatteryManager.BATTERY_PLUGGED_AC ||
-                        plugged == BatteryManager.BATTERY_PLUGGED_USB ||
-                        plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS
-
-                if (batteryLevel < 20 && !isCharging) {
-                    stopSharing(ServiceState.Launched.LowBattery)
-                } else {
-                    startSharing()
+        try {
+            if (isServiceStarted) return
+            isServiceStarted = true
+            startForeground(
+                NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
+                Pawns.instance.dependencyProvider.notificationManager.createServiceNotification()
+            )
+            PawnsLogger.d(TAG, ("Started service"))
+            serviceScope.coroutineContext.cancelChildren()
+            emitState(ServiceState.On)
+            wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+                newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG::lock").apply {
+                    acquire()
                 }
-                delay(CHECK_INTERVAL)
             }
+
+            serviceScope.launch {
+                while (isServiceStarted && isActive) {
+                    val batteryManager: BatteryManager? = getSystemService(BATTERY_SERVICE) as? BatteryManager
+                    val batteryLevel = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 100
+
+                    val intent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                    val plugged = intent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
+                    val isCharging = plugged == BatteryManager.BATTERY_PLUGGED_AC ||
+                            plugged == BatteryManager.BATTERY_PLUGGED_USB ||
+                            plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS
+
+                    if (batteryLevel < 20 && !isCharging) {
+                        stopSharing(ServiceState.Launched.LowBattery)
+                    } else {
+                        startSharing()
+                    }
+                    delay(CHECK_INTERVAL)
+                }
+            }
+        } catch (e: Exception) {
+            PawnsLogger.e(TAG, ("Failed to start foreground service $e"))
         }
     }
 
@@ -145,7 +137,7 @@ internal class PeerService : Service() {
         PawnsLogger.d(TAG, ("Started sharing"))
         Mobile_sdk.startMainRoutine(Pawns.instance.apiKey) {
             val event = Pawns.instance.dependencyProvider.jsonInstance.decodeFromString(SdkEvent.serializer(), it)
-            val sdkError: ServiceError? = when(event.parameters?.error) {
+            val sdkError: ServiceError? = when (event.parameters?.error) {
                 SdkErrorType.NO_FREE_PORT.sdkValue -> ServiceError.Critical("Unable to open port")
                 SdkErrorType.NON_RESIDENTIAL.sdkValue -> ServiceError.Critical("IP address is not suitable for internet sharing")
                 SdkErrorType.UNSUPPORTED.sdkValue -> ServiceError.Critical("Library version is too old and is no longer supported")
@@ -167,21 +159,25 @@ internal class PeerService : Service() {
     }
 
     // Responsible for stopping PeerService
-    private fun stopService() {
-        stopSharing(ServiceState.Off)
+    private fun stopService(startId: Int) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-            } else {
-                stopForeground(true)
+            stopSharing(ServiceState.Off)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    stopForeground(true)
+                }
+                stopSelf(startId)
+            } catch (e: Exception) {
+                PawnsLogger.e(TAG, e.message.orEmpty())
             }
-            stopSelf()
+            isServiceStarted = false
+            isSdkStarted = false
+            PawnsLogger.d(TAG, ("Stopped service"))
         } catch (e: Exception) {
-            PawnsLogger.e(TAG, e.message.orEmpty())
+            PawnsLogger.e(TAG, ("Failed to stop foreground service $e"))
         }
-        isServiceStarted = false
-        isSdkStarted = false
-        PawnsLogger.d(TAG, ("Stopped service"))
     }
 
     // Responsible for stopping SDK
