@@ -9,7 +9,11 @@
 
     <application>
         <service
-            android:name=".internal.service.PeerService"
+            android:name=".internal.service.PeerServiceForeground"
+            android:exported="false" />
+
+        <service
+            android:name=".internal.service.PeerServiceBackground"
             android:exported="false" />
     </application>
 

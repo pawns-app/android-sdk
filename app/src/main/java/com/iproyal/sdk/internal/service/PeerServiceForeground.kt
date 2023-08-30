@@ -23,14 +23,14 @@ import mobile_sdk.Mobile_sdk
 
 
 @SuppressLint("MissingPermission")
-internal class PeerService : Service() {
+internal class PeerServiceForeground : Service() {
 
     companion object {
-        const val TAG = "PawnsSdkService"
+        const val TAG = "PawnsSdkServiceForeground"
         const val CHECK_INTERVAL: Long = 5 * 60 * 1000 // 5min
 
         fun performAction(context: Context, action: ServiceAction) {
-            val intent = Intent(context, PeerService::class.java)
+            val intent = Intent(context, PeerServiceForeground::class.java)
             intent.action = action.name
 
             try {
@@ -39,7 +39,6 @@ internal class PeerService : Service() {
                 PawnsLogger.e(TAG, "Failed to start/stop foreground service $e")
             }
         }
-
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())

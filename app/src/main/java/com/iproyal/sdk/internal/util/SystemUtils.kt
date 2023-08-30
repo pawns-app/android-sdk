@@ -4,7 +4,8 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
 import com.iproyal.sdk.internal.logger.PawnsLogger
-import com.iproyal.sdk.internal.service.PeerService
+import com.iproyal.sdk.internal.service.PeerServiceBackground
+import com.iproyal.sdk.internal.service.PeerServiceForeground
 import com.iproyal.sdk.public.sdk.Pawns
 
 internal object SystemUtils {
@@ -16,7 +17,10 @@ internal object SystemUtils {
             return false
         }
         for (service in manager.getRunningServices(Int.MAX_VALUE)) {
-            if (PeerService::class.java.name == service.service.className) {
+            if (PeerServiceForeground::class.java.name == service.service.className) {
+                return true
+            }
+            if (PeerServiceBackground::class.java.name == service.service.className) {
                 return true
             }
         }

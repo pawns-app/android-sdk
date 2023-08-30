@@ -7,10 +7,12 @@ import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
 import com.iproyal.sdk.public.dto.ServiceState
 import com.iproyal.sdk.internal.provider.DependencyProvider
+import com.iproyal.sdk.internal.service.PeerServiceBackground
 import com.iproyal.sdk.public.listener.PawnsServiceListener
-import com.iproyal.sdk.internal.service.PeerService
+import com.iproyal.sdk.internal.service.PeerServiceForeground
 import com.iproyal.sdk.internal.util.DeviceIdHelper
 import com.iproyal.sdk.internal.util.SystemUtils
+import com.iproyal.sdk.public.dto.ServiceType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import mobile_sdk.Mobile_sdk
@@ -19,6 +21,7 @@ public class Pawns private constructor(
     context: Context,
     internal val apiKey: String,
     internal val serviceConfig: ServiceConfig,
+    internal val serviceType: ServiceType
 ) {
 
     public companion object {
@@ -32,7 +35,12 @@ public class Pawns private constructor(
             private set
     }
 
-    private constructor(builder: Builder) : this(builder.context, builder.apiKey, builder.serviceConfig)
+    private constructor(builder: Builder) : this(
+        builder.context,
+        builder.apiKey,
+        builder.serviceConfig,
+        builder.serviceType
+    )
 
     /**
      * PawnsSdk initialisation method. Recommended to be used while Application is starting.
@@ -44,6 +52,7 @@ public class Pawns private constructor(
         internal var apiKey: String = ""
         internal var serviceConfig: ServiceConfig = ServiceConfig()
         internal var isLoggingEnabled: Boolean = false
+        internal var serviceType: ServiceType = ServiceType.FOREGROUND
 
         /**
          * Mandatory method. It allows SDK to recognise and authorize the use of our service.
@@ -56,14 +65,25 @@ public class Pawns private constructor(
          * notification displayed to users, when service is running.
          * @param config Notification configuration parameters.
          */
-        public fun serviceConfig(config: ServiceConfig): Builder = apply { this.serviceConfig = config }
+        public fun serviceConfig(config: ServiceConfig): Builder =
+            apply { this.serviceConfig = config }
 
         /**
          * Optional method. Allows to configure PawnsSdk internal logger.
          * Default value is false.
          * @param isEnabled turns on or off PawnsSdk logger.
          */
-        public fun loggerEnabled(isEnabled: Boolean): Builder = apply { this.isLoggingEnabled = isEnabled }
+        public fun loggerEnabled(isEnabled: Boolean): Builder =
+            apply { this.isLoggingEnabled = isEnabled }
+
+        /**
+         * Optional method. Allows to configure PawnsSdk service type.
+         * Default value is SdkServiceType.FOREGROUND.
+         * @param serviceType configures SDK to launch service behaving either as foreground or
+         * background.
+         */
+        public fun serviceType(serviceType: ServiceType): Builder =
+            apply { this.serviceType = serviceType }
 
         /**
          * Mandatory method. Final method to build PawnsSdk instance for later usage.
@@ -84,7 +104,8 @@ public class Pawns private constructor(
         Mobile_sdk.initialize(deviceId, deviceName)
     }
 
-    internal val dependencyProvider: DependencyProvider = DependencyProvider(context)
+
+    internal val dependencyProvider: DependencyProvider = DependencyProvider(context, serviceType)
     internal var serviceListener: PawnsServiceListener? = null
     internal val _serviceState: MutableStateFlow<ServiceState> = MutableStateFlow(ServiceState.Off)
 
@@ -94,6 +115,13 @@ public class Pawns private constructor(
      * It provides with latest updates of PawnsSdk service state.
      */
     public val serviceState: StateFlow<ServiceState> = _serviceState
+
+    /**
+     * Provides the latest known state of service
+     */
+    public fun getStateSnapshot(): ServiceState {
+        return serviceState.value
+    }
 
     /**
      * Option 2.
@@ -119,7 +147,17 @@ public class Pawns private constructor(
      */
     public fun startSharing(context: Context) {
         if (!SystemUtils.isServiceRunning(context)) {
-            PeerService.performAction(context, ServiceAction.START_PAWNS_SERVICE)
+            when (instance.serviceType) {
+                ServiceType.FOREGROUND -> PeerServiceForeground.performAction(
+                    context,
+                    ServiceAction.START_PAWNS_SERVICE
+                )
+
+                ServiceType.BACKGROUND -> PeerServiceBackground.performAction(
+                    context,
+                    ServiceAction.START_PAWNS_SERVICE
+                )
+            }
         }
     }
 
@@ -128,11 +166,22 @@ public class Pawns private constructor(
      */
     public fun stopSharing(context: Context) {
         if (SystemUtils.isServiceRunning(context)) {
-            PeerService.performAction(context, ServiceAction.STOP_PAWNS_SERVICE)
+            when (instance.serviceType) {
+                ServiceType.FOREGROUND -> PeerServiceForeground.performAction(
+                    context,
+                    ServiceAction.STOP_PAWNS_SERVICE
+                )
+
+                ServiceType.BACKGROUND -> PeerServiceBackground.performAction(
+                    context,
+                    ServiceAction.STOP_PAWNS_SERVICE
+                )
+            }
         } else {
             instance._serviceState.value = ServiceState.Off
             instance.serviceListener?.onStateChange(ServiceState.Off)
         }
     }
+
 
 }

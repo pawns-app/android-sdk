@@ -7,11 +7,13 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
+import com.iproyal.sdk.public.dto.ServiceType
 import com.iproyal.sdk.public.sdk.Pawns
 
 
 internal class NotificationManager constructor(
-    private val context: Context
+    private val context: Context,
+    private val serviceType: ServiceType,
 ) {
 
     companion object {
@@ -20,11 +22,15 @@ internal class NotificationManager constructor(
     }
 
     private val serviceChannelName = "Sharing service"
-    private val notificationManager: NotificationManager = context.getSystemService(NotificationManager::class.java)
-    private val serviceNotificationBuilder: NotificationCompat.Builder = NotificationCompat.Builder(context, SERVICE_CHANNEL_ID)
+    private val notificationManager: NotificationManager =
+        context.getSystemService(NotificationManager::class.java)
+    private val serviceNotificationBuilder: NotificationCompat.Builder =
+        NotificationCompat.Builder(context, SERVICE_CHANNEL_ID)
 
     init {
-        initNotificationChannel()
+        if (serviceType == ServiceType.FOREGROUND) {
+            initNotificationChannel()
+        }
     }
 
     private fun initNotificationChannel() {
@@ -36,7 +42,10 @@ internal class NotificationManager constructor(
                         PackageManager.ApplicationInfoFlags.of(PackageManager.GET_META_DATA.toLong())
                     )
                 } else {
-                    context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
+                    context.packageManager.getApplicationInfo(
+                        context.packageName,
+                        PackageManager.GET_META_DATA
+                    )
                 }.metaData
                 metaData.getString("com.iproyal.sdk.pawns_service_channel_name")
             } catch (e: Exception) {
