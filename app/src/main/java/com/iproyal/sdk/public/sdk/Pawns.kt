@@ -105,7 +105,7 @@ public class Pawns private constructor(
     }
 
 
-    internal val dependencyProvider: DependencyProvider = DependencyProvider(context, serviceType)
+    internal val dependencyProvider: DependencyProvider = DependencyProvider(context, serviceConfig, serviceType)
     internal var serviceListener: PawnsServiceListener? = null
     internal val _serviceState: MutableStateFlow<ServiceState> = MutableStateFlow(ServiceState.Off)
 

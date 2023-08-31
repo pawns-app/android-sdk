@@ -7,12 +7,15 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
+import com.iproyal.sdk.public.dto.ServiceConfig
+import com.iproyal.sdk.public.dto.ServiceNotificationPriority
 import com.iproyal.sdk.public.dto.ServiceType
 import com.iproyal.sdk.public.sdk.Pawns
 
 
 internal class NotificationManager constructor(
     private val context: Context,
+    private val serviceConfig: ServiceConfig,
     private val serviceType: ServiceType,
 ) {
 
@@ -52,14 +55,18 @@ internal class NotificationManager constructor(
                 serviceChannelName
             }
 
-            val importance = NotificationManager.IMPORTANCE_HIGH
+            val importance = when(serviceConfig.notificationPriority) {
+                ServiceNotificationPriority.LOW -> NotificationManager.IMPORTANCE_LOW
+                ServiceNotificationPriority.DEFAULT -> NotificationManager.IMPORTANCE_DEFAULT
+                ServiceNotificationPriority.HIGH -> NotificationManager.IMPORTANCE_HIGH
+            }
             val serviceChannel = NotificationChannel(SERVICE_CHANNEL_ID, name, importance)
             notificationManager.createNotificationChannel(serviceChannel)
         }
     }
 
     fun createServiceNotification(): Notification {
-        val serviceConfig = Pawns.instance.serviceConfig
+
 
         val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
         val pendingIntent = PendingIntent.getActivity(
@@ -67,11 +74,18 @@ internal class NotificationManager constructor(
             launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val importance = when(serviceConfig.notificationPriority) {
+            ServiceNotificationPriority.LOW -> NotificationCompat.PRIORITY_LOW
+            ServiceNotificationPriority.DEFAULT -> NotificationCompat.PRIORITY_DEFAULT
+            ServiceNotificationPriority.HIGH -> NotificationCompat.PRIORITY_HIGH
+        }
+
         serviceNotificationBuilder
             .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(importance)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
+            .setChannelId(SERVICE_CHANNEL_ID)
             .setSilent(true)
 
         serviceConfig.title?.let { serviceNotificationBuilder.setContentTitle(context.getString(it)) }
