@@ -3,10 +3,14 @@ package com.iproyal.sdk.internal.notification
 import android.app.*
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Context.JOB_SCHEDULER_SERVICE
+import android.content.Context.NOTIFICATION_SERVICE
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import androidx.core.content.getSystemService
 import com.iproyal.sdk.public.dto.ServiceConfig
 import com.iproyal.sdk.public.dto.ServiceNotificationPriority
 import com.iproyal.sdk.public.dto.ServiceType
@@ -25,8 +29,11 @@ internal class NotificationManager constructor(
     }
 
     private val serviceChannelName = "Sharing service"
-    private val notificationManager: NotificationManager =
+    private val notificationManager: NotificationManager? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         context.getSystemService(NotificationManager::class.java)
+    } else {
+        ContextCompat.getSystemService(context, NotificationManager::class.java)
+    }
     private val serviceNotificationBuilder: NotificationCompat.Builder =
         NotificationCompat.Builder(context, SERVICE_CHANNEL_ID)
 
@@ -55,26 +62,24 @@ internal class NotificationManager constructor(
                 serviceChannelName
             }
 
-            val importance = when(serviceConfig.notificationPriority) {
+            val importance = when (serviceConfig.notificationPriority) {
                 ServiceNotificationPriority.LOW -> NotificationManager.IMPORTANCE_LOW
                 ServiceNotificationPriority.DEFAULT -> NotificationManager.IMPORTANCE_DEFAULT
                 ServiceNotificationPriority.HIGH -> NotificationManager.IMPORTANCE_HIGH
             }
             val serviceChannel = NotificationChannel(SERVICE_CHANNEL_ID, name, importance)
-            notificationManager.createNotificationChannel(serviceChannel)
+            notificationManager?.createNotificationChannel(serviceChannel)
         }
     }
 
     fun createServiceNotification(): Notification {
-
-
         val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
         val pendingIntent = PendingIntent.getActivity(
             context, CHANNEL_SERVICE_MESSAGE_ID,
             launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val importance = when(serviceConfig.notificationPriority) {
+        val importance = when (serviceConfig.notificationPriority) {
             ServiceNotificationPriority.LOW -> NotificationCompat.PRIORITY_LOW
             ServiceNotificationPriority.DEFAULT -> NotificationCompat.PRIORITY_DEFAULT
             ServiceNotificationPriority.HIGH -> NotificationCompat.PRIORITY_HIGH
