@@ -6,15 +6,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
-import android.os.Build
 import android.os.IBinder
-import android.os.PowerManager
 import com.iproyal.sdk.internal.dto.SdkErrorType
 import com.iproyal.sdk.internal.dto.SdkEvent
 import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
-import com.iproyal.sdk.internal.notification.NotificationManager
 import com.iproyal.sdk.public.dto.ServiceError
 import com.iproyal.sdk.public.dto.ServiceState
 import com.iproyal.sdk.public.sdk.Pawns
@@ -114,11 +111,16 @@ internal class PeerServiceBackground : Service() {
 
     // Responsible for starting Internet sharing SDK
     private fun startSharing() {
+        if (!Pawns.isInitialised) {
+            PawnsLogger.e(TAG, "Instance is not initialised, make sure to initialise before using startSharing")
+            return
+        }
         if (isSdkStarted) return
         isSdkStarted = true
         PawnsLogger.d(TAG, ("Started sharing"))
-        Mobile_sdk.startMainRoutine(Pawns.instance.apiKey) {
-            val event = Pawns.instance.dependencyProvider.jsonInstance.decodeFromString(
+        Mobile_sdk.startMainRoutine(Pawns.getInstance().apiKey) {
+            val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return@startMainRoutine
+            val event = dependencyProvider.jsonInstance.decodeFromString(
                 SdkEvent.serializer(),
                 it
             )
@@ -173,8 +175,12 @@ internal class PeerServiceBackground : Service() {
 
     // Triggers state change for coroutines flow and for listener
     private fun emitState(state: ServiceState) {
-        Pawns.instance._serviceState.value = state
-        Pawns.instance.serviceListener?.onStateChange(state)
+        if (!Pawns.isInitialised) {
+            PawnsLogger.e(TAG, "Instance is not initialised, cannot emitState")
+            return
+        }
+        Pawns.getInstance()._serviceState.value = state
+        Pawns.getInstance().serviceListener?.onStateChange(state)
     }
 
 }

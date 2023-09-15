@@ -64,10 +64,16 @@ internal class PeerServiceForeground : Service() {
     override fun onCreate() {
         super.onCreate()
         startService()
+        if (!Pawns.isInitialised) {
+            PawnsLogger.e(TAG, "Instance is not initialised, cannot create service")
+            stopService(-1)
+            return
+        }
         try {
+            val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return
             startForeground(
                 NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
-                Pawns.instance.dependencyProvider.notificationManager.createServiceNotification()
+                dependencyProvider.notificationManager.createServiceNotification()
             )
         } catch (e: Exception) {
             PawnsLogger.e(TAG, "Failed to create foreground service $e")
@@ -89,12 +95,17 @@ internal class PeerServiceForeground : Service() {
 
     // Responsible for starting PeerService
     private fun startService() {
+        if (!Pawns.isInitialised) {
+            PawnsLogger.e(PeerServiceBackground.TAG, "Instance is not initialised, cannot startService")
+            return
+        }
         try {
             if (isServiceStarted) return
             isServiceStarted = true
+            val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return
             startForeground(
                 NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
-                Pawns.instance.dependencyProvider.notificationManager.createServiceNotification()
+                dependencyProvider.notificationManager.createServiceNotification()
             )
             PawnsLogger.d(TAG, ("Started service"))
             serviceScope.coroutineContext.cancelChildren()
@@ -106,7 +117,7 @@ internal class PeerServiceForeground : Service() {
             }
 
             serviceScope.launch {
-                while (isServiceStarted && isActive) {
+                while (isServiceStarted && isActive && Pawns.isInitialised) {
                     val batteryManager: BatteryManager? = getSystemService(BATTERY_SERVICE) as? BatteryManager
                     val batteryLevel = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 100
 
@@ -134,8 +145,9 @@ internal class PeerServiceForeground : Service() {
         if (isSdkStarted) return
         isSdkStarted = true
         PawnsLogger.d(TAG, ("Started sharing"))
-        Mobile_sdk.startMainRoutine(Pawns.instance.apiKey) {
-            val event = Pawns.instance.dependencyProvider.jsonInstance.decodeFromString(SdkEvent.serializer(), it)
+        Mobile_sdk.startMainRoutine(Pawns.getInstance().apiKey) {
+            val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return@startMainRoutine
+            val event = dependencyProvider.jsonInstance.decodeFromString(SdkEvent.serializer(), it)
             val sdkError: ServiceError? = when (event.parameters?.error) {
                 SdkErrorType.NO_FREE_PORT.sdkValue -> ServiceError.Critical("Unable to open port")
                 SdkErrorType.NON_RESIDENTIAL.sdkValue -> ServiceError.Critical("IP address is not suitable for internet sharing")
@@ -189,8 +201,12 @@ internal class PeerServiceForeground : Service() {
 
     // Triggers state change for coroutines flow and for listener
     private fun emitState(state: ServiceState) {
-        Pawns.instance._serviceState.value = state
-        Pawns.instance.serviceListener?.onStateChange(state)
+        if (!Pawns.isInitialised) {
+            PawnsLogger.e(TAG, "Instance is not initialised, cannot emitState")
+            return
+        }
+        Pawns.getInstance()._serviceState.value = state
+        Pawns.getInstance().serviceListener?.onStateChange(state)
     }
 
 }

@@ -2,24 +2,23 @@ package com.iproyal.sdk.public.sdk
 
 import android.content.Context
 import android.util.Log
-import com.iproyal.sdk.public.dto.ServiceConfig
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
-import com.iproyal.sdk.public.dto.ServiceState
 import com.iproyal.sdk.internal.provider.DependencyProvider
 import com.iproyal.sdk.internal.service.PeerServiceBackground
-import com.iproyal.sdk.public.listener.PawnsServiceListener
 import com.iproyal.sdk.internal.service.PeerServiceForeground
 import com.iproyal.sdk.internal.util.DeviceIdHelper
 import com.iproyal.sdk.internal.util.SystemUtils
+import com.iproyal.sdk.public.dto.ServiceConfig
+import com.iproyal.sdk.public.dto.ServiceState
 import com.iproyal.sdk.public.dto.ServiceType
+import com.iproyal.sdk.public.listener.PawnsServiceListener
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import mobile_sdk.Mobile_sdk
 
 public class Pawns private constructor(
-    context: Context,
-    internal val apiKey: String,
+    internal val apiKey: String?,
     internal val serviceConfig: ServiceConfig,
     internal val serviceType: ServiceType
 ) {
@@ -27,16 +26,30 @@ public class Pawns private constructor(
     public companion object {
         internal const val TAG = "PawnsSdk"
 
+        private val uninitialisedInstance = Pawns(null, ServiceConfig(), ServiceType.BACKGROUND)
+
+        @Volatile
+        private var _instance: Pawns? = null
+
+        internal val isInitialised: Boolean
+            get() {
+                return _instance != null && _instance?.apiKey != null
+            }
+
         /**
          * PawnsSdk entry point to be used after initialization with Builder class and build method.
          */
-        @Volatile
-        public lateinit var instance: Pawns
-            private set
+        public fun getInstance(): Pawns {
+            return if (isInitialised) {
+                _instance ?: throw UninitializedPropertyAccessException("Internal instance was not initialised")
+            } else {
+                Log.e(TAG, "Instance was not initialised by Pawns.Builder")
+                uninitialisedInstance
+            }
+        }
     }
 
     private constructor(builder: Builder) : this(
-        builder.context,
         builder.apiKey,
         builder.serviceConfig,
         builder.serviceType
@@ -94,32 +107,44 @@ public class Pawns private constructor(
             }
             PawnsLogger.isEnabled = isLoggingEnabled
             val pawns = Pawns(this)
-            instance = pawns
+            pawns.init(context)
+            _instance = pawns
         }
     }
 
-    init {
+    internal var dependencyProvider: DependencyProvider? = null
+    internal var serviceListener: PawnsServiceListener? = null
+    internal val _serviceState: MutableStateFlow<ServiceState> = MutableStateFlow(ServiceState.Off)
+    internal val serviceState: StateFlow<ServiceState> = _serviceState
+
+    private fun init(context: Context) {
         val deviceId = DeviceIdHelper.id(context)
         val deviceName = SystemUtils.getDeviceNameAndOsVersion()
         Mobile_sdk.initialize(deviceId, deviceName)
+        dependencyProvider = DependencyProvider(context, serviceConfig, serviceType)
     }
-
-
-    internal val dependencyProvider: DependencyProvider = DependencyProvider(context, serviceConfig, serviceType)
-    internal var serviceListener: PawnsServiceListener? = null
-    internal val _serviceState: MutableStateFlow<ServiceState> = MutableStateFlow(ServiceState.Off)
 
     /**
      * Option 1.
      * Coroutine approach.
      * It provides with latest updates of PawnsSdk service state.
      */
-    public val serviceState: StateFlow<ServiceState> = _serviceState
+    public fun getServiceState(): StateFlow<ServiceState> {
+        if (!isInitialised) {
+            PawnsLogger.e(TAG, "Instance is not initialised, getServiceState returning ServiceState.Off")
+            return MutableStateFlow(ServiceState.Off)
+        }
+        return serviceState
+    }
 
     /**
      * Provides the latest known state of service
      */
-    public fun getStateSnapshot(): ServiceState {
+    public fun getServiceStateSnapshot(): ServiceState {
+        if (!isInitialised) {
+            PawnsLogger.e(TAG, "Instance is not initialised, getServiceStateSnapshot returning ServiceState.Off")
+            return ServiceState.Off
+        }
         return serviceState.value
     }
 
@@ -146,8 +171,12 @@ public class Pawns private constructor(
      * Runs PawnsSdk Internet sharing service and starts updating its state.
      */
     public fun startSharing(context: Context) {
+        if (!isInitialised) {
+            PawnsLogger.e(TAG, "Instance is not initialised, make sure to initialise before using startSharing")
+            return
+        }
         if (!SystemUtils.isServiceRunning(context)) {
-            when (instance.serviceType) {
+            when (getInstance().serviceType) {
                 ServiceType.FOREGROUND -> PeerServiceForeground.performAction(
                     context,
                     ServiceAction.START_PAWNS_SERVICE
@@ -165,8 +194,12 @@ public class Pawns private constructor(
      * Stops PawnsSdk Internet sharing service.
      */
     public fun stopSharing(context: Context) {
+        if (!isInitialised) {
+            PawnsLogger.e(TAG, "Instance is not initialised, make sure to initialise before using stopSharing")
+            return
+        }
         if (SystemUtils.isServiceRunning(context)) {
-            when (instance.serviceType) {
+            when (getInstance().serviceType) {
                 ServiceType.FOREGROUND -> PeerServiceForeground.performAction(
                     context,
                     ServiceAction.STOP_PAWNS_SERVICE
@@ -178,8 +211,8 @@ public class Pawns private constructor(
                 )
             }
         } else {
-            instance._serviceState.value = ServiceState.Off
-            instance.serviceListener?.onStateChange(ServiceState.Off)
+            getInstance()._serviceState.value = ServiceState.Off
+            getInstance().serviceListener?.onStateChange(ServiceState.Off)
         }
     }
 

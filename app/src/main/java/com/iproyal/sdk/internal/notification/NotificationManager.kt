@@ -1,20 +1,18 @@
 package com.iproyal.sdk.internal.notification
 
-import android.app.*
+import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
-import android.content.Context.JOB_SCHEDULER_SERVICE
-import android.content.Context.NOTIFICATION_SERVICE
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.getSystemService
 import com.iproyal.sdk.public.dto.ServiceConfig
 import com.iproyal.sdk.public.dto.ServiceNotificationPriority
 import com.iproyal.sdk.public.dto.ServiceType
-import com.iproyal.sdk.public.sdk.Pawns
 
 
 internal class NotificationManager constructor(
