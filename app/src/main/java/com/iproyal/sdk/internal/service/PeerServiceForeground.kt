@@ -15,9 +15,9 @@ import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
 import com.iproyal.sdk.internal.notification.NotificationManager
-import com.iproyal.sdk.public.dto.ServiceError
-import com.iproyal.sdk.public.dto.ServiceState
-import com.iproyal.sdk.public.sdk.Pawns
+import com.iproyal.sdk.common.dto.ServiceError
+import com.iproyal.sdk.common.dto.ServiceState
+import com.iproyal.sdk.common.sdk.Pawns
 import kotlinx.coroutines.*
 import mobile_sdk.Mobile_sdk
 

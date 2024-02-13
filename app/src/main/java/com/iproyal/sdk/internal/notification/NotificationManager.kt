@@ -10,9 +10,9 @@ import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.iproyal.sdk.public.dto.ServiceConfig
-import com.iproyal.sdk.public.dto.ServiceNotificationPriority
-import com.iproyal.sdk.public.dto.ServiceType
+import com.iproyal.sdk.common.dto.ServiceConfig
+import com.iproyal.sdk.common.dto.ServiceNotificationPriority
+import com.iproyal.sdk.common.dto.ServiceType
 
 
 internal class NotificationManager constructor(

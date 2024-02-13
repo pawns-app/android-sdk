@@ -1,4 +1,4 @@
-package com.iproyal.sdk.public.dto
+package com.iproyal.sdk.common.dto
 
 /**
  * Exhaustive list of all available Internet sharing service error types

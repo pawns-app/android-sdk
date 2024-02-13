@@ -1,4 +1,4 @@
-package com.iproyal.sdk.public.sdk
+package com.iproyal.sdk.common.sdk
 
 import android.content.Context
 import android.util.Log
@@ -9,10 +9,10 @@ import com.iproyal.sdk.internal.service.PeerServiceBackground
 import com.iproyal.sdk.internal.service.PeerServiceForeground
 import com.iproyal.sdk.internal.util.DeviceIdHelper
 import com.iproyal.sdk.internal.util.SystemUtils
-import com.iproyal.sdk.public.dto.ServiceConfig
-import com.iproyal.sdk.public.dto.ServiceState
-import com.iproyal.sdk.public.dto.ServiceType
-import com.iproyal.sdk.public.listener.PawnsServiceListener
+import com.iproyal.sdk.common.dto.ServiceConfig
+import com.iproyal.sdk.common.dto.ServiceState
+import com.iproyal.sdk.common.dto.ServiceType
+import com.iproyal.sdk.common.listener.PawnsServiceListener
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import mobile_sdk.Mobile_sdk

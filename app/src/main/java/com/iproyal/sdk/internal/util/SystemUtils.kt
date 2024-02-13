@@ -6,7 +6,7 @@ import android.os.Build
 import com.iproyal.sdk.internal.logger.PawnsLogger
 import com.iproyal.sdk.internal.service.PeerServiceBackground
 import com.iproyal.sdk.internal.service.PeerServiceForeground
-import com.iproyal.sdk.public.sdk.Pawns
+import com.iproyal.sdk.common.sdk.Pawns
 
 internal object SystemUtils {
 

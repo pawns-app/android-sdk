@@ -1,6 +1,6 @@
-package com.iproyal.sdk.public.listener
+package com.iproyal.sdk.common.listener
 
-import com.iproyal.sdk.public.dto.ServiceState
+import com.iproyal.sdk.common.dto.ServiceState
 
 /**
  * Optional interface.

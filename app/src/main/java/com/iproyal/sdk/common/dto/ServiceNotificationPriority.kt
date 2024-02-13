@@ -1,4 +1,4 @@
-package com.iproyal.sdk.public.dto
+package com.iproyal.sdk.common.dto
 
 /**
  * Corresponds to original notification importance settings
