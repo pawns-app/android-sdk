@@ -6,7 +6,7 @@ This library sole purpose is to be distributed to other developers in order to p
 
 ### Summary ###
 
-* Latest Version 1.0.0
+* Latest Version 1.1.0
 * [Documentation](https://iproyal.atlassian.net/wiki/spaces/IPROYAL/pages/251625485/Mobile+Sdk)
 
 ### Local deployment ###
