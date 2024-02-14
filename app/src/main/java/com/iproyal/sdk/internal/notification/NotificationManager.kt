@@ -71,7 +71,7 @@ internal class NotificationManager constructor(
     }
 
     fun createServiceNotification(): Notification {
-        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val launchIntent = serviceConfig.launcherIntent ?: context.packageManager.getLaunchIntentForPackage(context.packageName)
         val pendingIntent = PendingIntent.getActivity(
             context, CHANNEL_SERVICE_MESSAGE_ID,
             launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
