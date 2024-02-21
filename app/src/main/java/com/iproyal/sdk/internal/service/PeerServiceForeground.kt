@@ -5,6 +5,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
@@ -34,7 +35,11 @@ internal class PeerServiceForeground : Service() {
             intent.action = action.name
 
             try {
-                context.startService(intent)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
             } catch (e: Exception) {
                 PawnsLogger.e(TAG, "Failed to start/stop foreground service $e")
             }
@@ -43,11 +48,33 @@ internal class PeerServiceForeground : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wakeLockTag: String = "com.iproyal.sdk:LOCK"
     private var isServiceStarted = false
     private var isSdkStarted = false
 
+    private fun start() {
+        val dependencyProvider = Pawns.getInstance().dependencyProvider
+        if (dependencyProvider == null) {
+            PawnsLogger.e(TAG, "start failed due to dependencyProvider being null")
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
+                dependencyProvider.notificationManager.createServiceNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(
+                NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
+                dependencyProvider.notificationManager.createServiceNotification(),
+            )
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         PawnsLogger.d(TAG, "Action received ${intent?.action}")
+        start()
         when (intent?.action) {
             null -> startService()
             ServiceAction.START_PAWNS_SERVICE.name -> startService()
@@ -63,18 +90,16 @@ internal class PeerServiceForeground : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        startService()
+        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.M && Build.MANUFACTURER.equals("Huawei")) {
+            wakeLockTag = "LocationManagerService";
+        }
         if (!Pawns.isInitialised) {
             PawnsLogger.e(TAG, "Instance is not initialised, cannot create service")
             stopService(-1)
             return
         }
         try {
-            val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return
-            startForeground(
-                NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
-                dependencyProvider.notificationManager.createServiceNotification()
-            )
+            start()
         } catch (e: Exception) {
             PawnsLogger.e(TAG, "Failed to create foreground service $e")
         }
@@ -102,16 +127,11 @@ internal class PeerServiceForeground : Service() {
         try {
             if (isServiceStarted) return
             isServiceStarted = true
-            val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return
-            startForeground(
-                NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
-                dependencyProvider.notificationManager.createServiceNotification()
-            )
             PawnsLogger.d(TAG, ("Started service"))
             serviceScope.coroutineContext.cancelChildren()
             emitState(ServiceState.On)
             wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
-                newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$TAG::lock").apply {
+                newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, wakeLockTag).apply {
                     acquire()
                 }
             }

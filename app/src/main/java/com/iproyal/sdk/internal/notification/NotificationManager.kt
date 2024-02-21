@@ -1,5 +1,7 @@
 package com.iproyal.sdk.internal.notification
 
+import android.app.ActivityOptions
+import android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -35,6 +37,12 @@ internal class NotificationManager constructor(
     private val serviceNotificationBuilder: NotificationCompat.Builder =
         NotificationCompat.Builder(context, SERVICE_CHANNEL_ID)
 
+    private val options = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle()
+    } else {
+        null
+    }
+
     init {
         if (serviceType == ServiceType.FOREGROUND) {
             initNotificationChannel()
@@ -55,7 +63,7 @@ internal class NotificationManager constructor(
                         PackageManager.GET_META_DATA
                     )
                 }.metaData
-                metaData.getString("com.iproyal.sdk.pawns_service_channel_name")
+                metaData.getString("com.iproyal.sdk.pawns_service_channel_name", serviceChannelName)
             } catch (e: Exception) {
                 serviceChannelName
             }
@@ -72,10 +80,14 @@ internal class NotificationManager constructor(
 
     fun createServiceNotification(): Notification {
         val launchIntent = serviceConfig.launcherIntent ?: context.packageManager.getLaunchIntentForPackage(context.packageName)
-        val pendingIntent = PendingIntent.getActivity(
-            context, CHANNEL_SERVICE_MESSAGE_ID,
-            launchIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pendingIntent = launchIntent?.let {
+            PendingIntent.getActivity(
+                context, CHANNEL_SERVICE_MESSAGE_ID,
+                it,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                options
+            )
+        }
 
         val importance = when (serviceConfig.notificationPriority) {
             ServiceNotificationPriority.LOW -> NotificationCompat.PRIORITY_LOW
@@ -90,6 +102,7 @@ internal class NotificationManager constructor(
             .setContentIntent(pendingIntent)
             .setChannelId(SERVICE_CHANNEL_ID)
             .setSilent(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
 
         serviceConfig.title?.let { serviceNotificationBuilder.setContentTitle(context.getString(it)) }
         serviceConfig.body?.let { serviceNotificationBuilder.setContentText(context.getString(it)) }
