@@ -91,7 +91,7 @@ internal class PeerServiceForeground : Service() {
     override fun onCreate() {
         super.onCreate()
         if (Build.VERSION.SDK_INT == Build.VERSION_CODES.M && Build.MANUFACTURER.equals("Huawei")) {
-            wakeLockTag = "LocationManagerService";
+            wakeLockTag = "LocationManagerService"
         }
         if (!Pawns.isInitialised) {
             PawnsLogger.e(TAG, "Instance is not initialised, cannot create service")

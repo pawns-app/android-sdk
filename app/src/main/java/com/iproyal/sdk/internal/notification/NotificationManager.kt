@@ -20,7 +20,7 @@ import com.iproyal.sdk.common.dto.ServiceType
 internal class NotificationManager constructor(
     private val context: Context,
     private val serviceConfig: ServiceConfig,
-    private val serviceType: ServiceType,
+    serviceType: ServiceType,
 ) {
 
     companion object {
