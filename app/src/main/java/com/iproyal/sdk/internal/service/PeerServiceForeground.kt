@@ -1,6 +1,5 @@
 package com.iproyal.sdk.internal.service
 
-import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -10,20 +9,27 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import androidx.core.app.ServiceCompat
+import com.iproyal.sdk.common.dto.ServiceError
+import com.iproyal.sdk.common.dto.ServiceState
+import com.iproyal.sdk.common.sdk.Pawns
 import com.iproyal.sdk.internal.dto.SdkErrorType
 import com.iproyal.sdk.internal.dto.SdkEvent
 import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
 import com.iproyal.sdk.internal.notification.NotificationManager
-import com.iproyal.sdk.common.dto.ServiceError
-import com.iproyal.sdk.common.dto.ServiceState
-import com.iproyal.sdk.common.sdk.Pawns
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import mobile_sdk.Mobile_sdk
 
 
-@SuppressLint("MissingPermission")
 internal class PeerServiceForeground : Service() {
 
     companion object {
@@ -52,29 +58,30 @@ internal class PeerServiceForeground : Service() {
     private var isServiceStarted = false
     private var isSdkStarted = false
 
-    private fun start() {
+    private fun start(startId: Int?) {
         val dependencyProvider = Pawns.getInstance().dependencyProvider
         if (dependencyProvider == null) {
             PawnsLogger.e(TAG, "start failed due to dependencyProvider being null")
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
+
+        runCatching {
+            ServiceCompat.startForeground(
+                this,
                 NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
                 dependencyProvider.notificationManager.createServiceNotification(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                else 0
             )
-        } else {
-            startForeground(
-                NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
-                dependencyProvider.notificationManager.createServiceNotification(),
-            )
+        }.onFailure { error ->
+            PawnsLogger.e(TAG, "Unable to start PeerServiceForeground $error")
+            stopService(startId)
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         PawnsLogger.d(TAG, "Action received ${intent?.action}")
-        start()
+        start(startId)
         when (intent?.action) {
             null -> startService()
             ServiceAction.START_PAWNS_SERVICE.name -> startService()
@@ -99,7 +106,7 @@ internal class PeerServiceForeground : Service() {
             return
         }
         try {
-            start()
+            start(null)
         } catch (e: Exception) {
             PawnsLogger.e(TAG, "Failed to create foreground service $e")
         }
@@ -190,7 +197,7 @@ internal class PeerServiceForeground : Service() {
     }
 
     // Responsible for stopping PeerService
-    private fun stopService(startId: Int) {
+    private fun stopService(startId: Int?) {
         try {
             stopSharing(ServiceState.Off)
             try {
@@ -199,12 +206,12 @@ internal class PeerServiceForeground : Service() {
                 } else {
                     stopForeground(true)
                 }
-                stopSelf(startId)
+                if (startId != null) stopSelf(startId) else stopSelf()
             } catch (e: Exception) {
                 PawnsLogger.e(TAG, e.message.orEmpty())
             }
             isServiceStarted = false
-            isSdkStarted = false
+            runCatching { serviceScope.cancel() }
             PawnsLogger.d(TAG, ("Stopped service"))
         } catch (e: Exception) {
             PawnsLogger.e(TAG, ("Failed to stop foreground service $e"))

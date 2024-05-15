@@ -1,20 +1,19 @@
 package com.iproyal.sdk.internal.service
 
-import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.IBinder
+import com.iproyal.sdk.common.dto.ServiceError
+import com.iproyal.sdk.common.dto.ServiceState
+import com.iproyal.sdk.common.sdk.Pawns
 import com.iproyal.sdk.internal.dto.SdkErrorType
 import com.iproyal.sdk.internal.dto.SdkEvent
 import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
-import com.iproyal.sdk.common.dto.ServiceError
-import com.iproyal.sdk.common.dto.ServiceState
-import com.iproyal.sdk.common.sdk.Pawns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,7 +24,6 @@ import kotlinx.coroutines.launch
 import mobile_sdk.Mobile_sdk
 
 
-@SuppressLint("MissingPermission")
 internal class PeerServiceBackground : Service() {
 
     companion object {
