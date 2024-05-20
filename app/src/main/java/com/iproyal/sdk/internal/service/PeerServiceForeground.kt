@@ -19,7 +19,6 @@ import com.iproyal.sdk.internal.dto.SdkEvent
 import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
-import com.iproyal.sdk.internal.notification.NotificationManager
 import com.iproyal.sdk.internal.util.PermissionUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -72,16 +71,20 @@ internal class PeerServiceForeground : Service() {
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
                         PermissionUtil.hasPermissionInManifest(
                             this, Manifest.permission.FOREGROUND_SERVICE_DATA_SYNC
+                        ) &&
+                        !PermissionUtil.hasPermissionInManifest(
+                            this, Manifest.permission.FOREGROUND_SERVICE_SPECIAL_USE
                         ) -> ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
 
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
                 else -> 0
             }
 
+            val notificationManager = dependencyProvider.notificationManager
             ServiceCompat.startForeground(
                 this,
-                NotificationManager.CHANNEL_SERVICE_MESSAGE_ID,
-                dependencyProvider.notificationManager.createServiceNotification(),
+                notificationManager.getNotificationId(),
+                notificationManager.createServiceNotification(),
                 foregroundServiceType
             )
         }.onFailure { error ->

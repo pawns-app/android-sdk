@@ -14,13 +14,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.iproyal.sdk.common.dto.ServiceConfig
 import com.iproyal.sdk.common.dto.ServiceNotificationPriority
-import com.iproyal.sdk.common.dto.ServiceType
 
 
 internal class NotificationManager constructor(
     private val context: Context,
     private val serviceConfig: ServiceConfig,
-    serviceType: ServiceType,
 ) {
 
     companion object {
@@ -43,13 +41,11 @@ internal class NotificationManager constructor(
         null
     }
 
-    init {
-        if (serviceType == ServiceType.FOREGROUND) {
-            initNotificationChannel()
-        }
-    }
+    // Provided by consumer, who wishes to combine existing foreground service notification with ours
+    private var externalNotification: Notification? = null
+    private var externalNotificationId: Int? = null
 
-    private fun initNotificationChannel() {
+    internal fun initNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = try {
                 val metaData: Bundle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -78,7 +74,10 @@ internal class NotificationManager constructor(
         }
     }
 
-    fun createServiceNotification(): Notification {
+    internal fun createServiceNotification(): Notification {
+        val currentExternalNotification = externalNotification
+        if (currentExternalNotification != null) return currentExternalNotification
+
         val launchIntent = serviceConfig.launcherIntent ?: context.packageManager.getLaunchIntentForPackage(context.packageName)
         val pendingIntent = launchIntent?.let {
             PendingIntent.getActivity(
@@ -109,6 +108,15 @@ internal class NotificationManager constructor(
         serviceConfig.smallIcon?.let { serviceNotificationBuilder.setSmallIcon(it) }
 
         return serviceNotificationBuilder.build()
+    }
+
+    internal fun setExternalNotification(notification: Notification, notificationId: Int) {
+        externalNotification = notification
+        externalNotificationId = notificationId
+    }
+
+    internal fun getNotificationId(): Int {
+        return externalNotificationId ?: CHANNEL_SERVICE_MESSAGE_ID
     }
 
 }

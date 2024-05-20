@@ -1,7 +1,12 @@
 package com.iproyal.sdk.common.sdk
 
+import android.app.Notification
 import android.content.Context
 import android.util.Log
+import com.iproyal.sdk.common.dto.ServiceConfig
+import com.iproyal.sdk.common.dto.ServiceState
+import com.iproyal.sdk.common.dto.ServiceType
+import com.iproyal.sdk.common.listener.PawnsServiceListener
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
 import com.iproyal.sdk.internal.provider.DependencyProvider
@@ -9,10 +14,6 @@ import com.iproyal.sdk.internal.service.PeerServiceBackground
 import com.iproyal.sdk.internal.service.PeerServiceForeground
 import com.iproyal.sdk.internal.util.DeviceIdHelper
 import com.iproyal.sdk.internal.util.SystemUtils
-import com.iproyal.sdk.common.dto.ServiceConfig
-import com.iproyal.sdk.common.dto.ServiceState
-import com.iproyal.sdk.common.dto.ServiceType
-import com.iproyal.sdk.common.listener.PawnsServiceListener
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import mobile_sdk.Mobile_sdk
@@ -121,7 +122,7 @@ public class Pawns private constructor(
         val deviceId = DeviceIdHelper.id(context)
         val deviceName = SystemUtils.getDeviceNameAndOsVersion()
         Mobile_sdk.initialize(deviceId, deviceName)
-        dependencyProvider = DependencyProvider(context, serviceConfig, serviceType)
+        dependencyProvider = DependencyProvider(context, serviceConfig)
     }
 
     /**
@@ -171,21 +172,33 @@ public class Pawns private constructor(
      * Runs PawnsSdk Internet sharing service and starts updating its state.
      */
     public fun startSharing(context: Context) {
+        startSharing(context, null, null)
+    }
+
+    /**
+     * Runs PawnsSdk Internet sharing service and starts updating its state.
+     * Optional method to use in case you want a full control of notification that is displayed or already have a running foreground service
+     * and you want to reuse/combine your notification instead of SDK displaying default notification.
+     * @param notification - Notification object that must match your current foreground service notification (same channel)
+     * @param notificationId - Same notification id that you passed to startForeground when launching your existing service
+     */
+    public fun startSharing(context: Context, notification: Notification?, notificationId: Int?) {
         if (!isInitialised) {
             PawnsLogger.e(TAG, "Instance is not initialised, make sure to initialise before using startSharing")
             return
         }
         if (!SystemUtils.isServiceRunning(context)) {
             when (getInstance().serviceType) {
-                ServiceType.FOREGROUND -> PeerServiceForeground.performAction(
-                    context,
-                    ServiceAction.START_PAWNS_SERVICE
-                )
+                ServiceType.FOREGROUND -> {
+                    if (notification == null || notificationId == null) {
+                        dependencyProvider?.notificationManager?.initNotificationChannel()
+                    } else {
+                        dependencyProvider?.notificationManager?.setExternalNotification(notification, notificationId)
+                    }
+                    PeerServiceForeground.performAction(context, ServiceAction.START_PAWNS_SERVICE)
+                }
 
-                ServiceType.BACKGROUND -> PeerServiceBackground.performAction(
-                    context,
-                    ServiceAction.START_PAWNS_SERVICE
-                )
+                ServiceType.BACKGROUND -> PeerServiceBackground.performAction(context, ServiceAction.START_PAWNS_SERVICE)
             }
         }
     }
