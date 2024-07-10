@@ -10,18 +10,7 @@
 <!--    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />-->
 
     <application>
-<!--        <service-->
-<!--            android:name=".internal.service.PeerServiceForeground"-->
-<!--            android:exported="false"-->
-<!--            android:foregroundServiceType="specialUse">-->
-<!--            <property-->
-<!--                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"-->
-<!--                android:value="Allows to share internet traffic by modifying device's network settings to be used as a gateway for internet traffic. Device becomes a gateway which allows to send and receive internet traffic." />-->
-<!--        </service>-->
 
-<!--        <service-->
-<!--            android:name=".internal.service.PeerServiceBackground"-->
-<!--            android:exported="false" />-->
     </application>
 
 </manifest>

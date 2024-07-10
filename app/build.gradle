@@ -36,6 +36,12 @@ android {
     kotlinOptions {
         freeCompilerArgs += '-Xexplicit-api=strict'
     }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+            keepDebugSymbols.add("**/*.so")
+        }
+    }
 }
 
 dependencies {
