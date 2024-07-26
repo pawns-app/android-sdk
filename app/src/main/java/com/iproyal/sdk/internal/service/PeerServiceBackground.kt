@@ -14,6 +14,7 @@ import com.iproyal.sdk.internal.dto.SdkEvent
 import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
+import com.pawns.ndk.PawnsCore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,7 +22,6 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import mobile_sdk.Mobile_sdk
 
 
 internal class PeerServiceBackground : Service() {
@@ -116,34 +116,37 @@ internal class PeerServiceBackground : Service() {
         if (isSdkStarted) return
         isSdkStarted = true
         PawnsLogger.d(TAG, ("Started sharing"))
-        Mobile_sdk.startMainRoutine(Pawns.getInstance().apiKey) {
-            val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return@startMainRoutine
-            val event = dependencyProvider.jsonInstance.decodeFromString(
-                SdkEvent.serializer(),
-                it
-            )
-            val sdkError: ServiceError? = when (event.parameters?.error) {
-                SdkErrorType.NO_FREE_PORT.sdkValue -> ServiceError.Critical("Unable to open port")
-                SdkErrorType.NON_RESIDENTIAL.sdkValue -> ServiceError.Critical("IP address is not suitable for internet sharing")
-                SdkErrorType.UNSUPPORTED.sdkValue -> ServiceError.Critical("Library version is too old and is no longer supported")
-                SdkErrorType.UNAUTHORISED.sdkValue -> ServiceError.Critical("ApiKey is incorrect or expired")
-                SdkErrorType.LOST_CONNECTION.sdkValue -> ServiceError.General("Lost connection")
-                SdkErrorType.IP_USED.sdkValue -> ServiceError.General("This IP is already in use")
-                SdkErrorType.PEER_ALIVE_FAILED.sdkValue -> ServiceError.General("Internal error")
-                null -> null
-                else -> ServiceError.Unknown(event.parameters.error)
-            }
-            val serviceState = when {
-                event.name == SdkLifeCycleName.STARTING.sdkValue -> ServiceState.On
-                event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError != null -> ServiceState.Launched.Error(
-                    sdkError
+        PawnsCore.StartMainRoutine(Pawns.getInstance().apiKey, object : PawnsCore.Callback {
+            override fun onCallback(callback: String) {
+                val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return
+                val event = dependencyProvider.jsonInstance.decodeFromString(
+                    SdkEvent.serializer(),
+                    callback
                 )
+                val sdkError: ServiceError? = when (event.parameters?.error) {
+                    SdkErrorType.NO_FREE_PORT.sdkValue -> ServiceError.Critical("Unable to open port")
+                    SdkErrorType.NON_RESIDENTIAL.sdkValue -> ServiceError.Critical("IP address is not suitable for internet sharing")
+                    SdkErrorType.UNSUPPORTED.sdkValue -> ServiceError.Critical("Library version is too old and is no longer supported")
+                    SdkErrorType.UNAUTHORISED.sdkValue -> ServiceError.Critical("ApiKey is incorrect or expired")
+                    SdkErrorType.LOST_CONNECTION.sdkValue -> ServiceError.General("Lost connection")
+                    SdkErrorType.IP_USED.sdkValue -> ServiceError.General("This IP is already in use")
+                    SdkErrorType.PEER_ALIVE_FAILED.sdkValue -> ServiceError.General("Internal error")
+                    null -> null
+                    else -> ServiceError.Unknown(event.parameters.error)
+                }
+                val serviceState = when {
+                    event.name == SdkLifeCycleName.STARTING.sdkValue -> ServiceState.On
+                    event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError != null -> ServiceState.Launched.Error(
+                        sdkError
+                    )
 
-                else -> ServiceState.Launched.Running
+                    else -> ServiceState.Launched.Running
+                }
+                emitState(serviceState)
+                PawnsLogger.d(TAG, "state: $serviceState error: $sdkError")
+
             }
-            emitState(serviceState)
-            PawnsLogger.d(TAG, "state: $serviceState error: $sdkError")
-        }
+        })
     }
 
     // Responsible for stopping PeerService
@@ -166,7 +169,7 @@ internal class PeerServiceBackground : Service() {
     // Responsible for stopping SDK
     private fun stopSharing(state: ServiceState) {
         PawnsLogger.d(TAG, ("Stopped sharing"))
-        Mobile_sdk.stopMainRoutine()
+        PawnsCore.StopMainRoutine()
         emitState(state)
         isSdkStarted = false
     }
