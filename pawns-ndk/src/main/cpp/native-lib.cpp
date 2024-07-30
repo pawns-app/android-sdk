@@ -1,5 +1,7 @@
 #include <jni.h>
 #include <string>
+#include <mutex>
+#include <android/log.h>
 
 #ifdef ARCH_ARM64_V8A
 #include "arm64-v8a/libpawns_mobile_sdk.h"
@@ -13,26 +15,53 @@
 #error "Unsupported architecture"
 #endif
 
-// Include the generated header file from your Go code
-extern "C" {
-
-
 static JavaVM* javaVM = nullptr;
 static jobject globalCallback = nullptr;
+static std::mutex callbackMutex;
 
+extern "C" {
 // Define the callback function that matches the expected type
+#define LOG_TAG "NativeLib"
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
 void myCallback(char* message) {
-    JNIEnv* env;
-    javaVM->AttachCurrentThread(reinterpret_cast<JNIEnv**>(&env), nullptr);
+    JNIEnv* env = nullptr;
+    bool attached = false;
 
-    jclass callbackClass = env->GetObjectClass(globalCallback);
-    jmethodID methodID = env->GetMethodID(callbackClass, "onCallback", "(Ljava/lang/String;)V");
-    jstring javaMessage = env->NewStringUTF(message);
+    // Check if the current thread is already attached to the JVM
+    if (javaVM->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        // If not, attach it
+        if (javaVM->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+            attached = true;
+        } else {
+            LOGE("Failed to attach current thread to Java VM");
+            return;
+        }
+    }
 
-    env->CallVoidMethod(globalCallback, methodID, javaMessage);
+    // Assuming that the message should be passed to the Java layer
+    if (env != nullptr && globalCallback != nullptr) {
+        jclass callbackClass = env->GetObjectClass(globalCallback);
+        if (callbackClass != nullptr) {
+            jmethodID onCallbackMethod = env->GetMethodID(callbackClass, "onCallback", "(Ljava/lang/String;)V");
+            if (onCallbackMethod != nullptr) {
+                jstring jMessage = env->NewStringUTF(message);
+                env->CallVoidMethod(globalCallback, onCallbackMethod, jMessage);
+                env->DeleteLocalRef(jMessage);
+            } else {
+                LOGE("Failed to find method 'onCallback' in globalCallback");
+            }
+            env->DeleteLocalRef(callbackClass);
+        } else {
+            LOGE("Failed to find class of globalCallback");
+        }
+    }
 
-    env->DeleteLocalRef(javaMessage);
-    javaVM->DetachCurrentThread();
+    // Detach the thread if it was attached in this function
+    if (attached) {
+        javaVM->DetachCurrentThread();
+    }
 }
 
 JNIEXPORT void JNICALL
@@ -46,24 +75,23 @@ Java_com_pawns_ndk_NativeLib_Initialize(JNIEnv *env, jobject obj, jstring rawDev
     env->ReleaseStringUTFChars(rawDeviceName, cRawDeviceName);
 }
 
-// JNI function to start the main routine
 JNIEXPORT void JNICALL
 Java_com_pawns_ndk_NativeLib_StartMainRoutine(JNIEnv* env, jobject obj, jstring rawAccessToken, jobject callback) {
     const char* nativeAccessToken = env->GetStringUTFChars(rawAccessToken, 0);
 
-    // Store the Java callback globally
-    if (globalCallback != nullptr) {
-        env->DeleteGlobalRef(globalCallback);
-    }
-    globalCallback = env->NewGlobalRef(callback);
+    {
+        std::lock_guard<std::mutex> lock(callbackMutex);
+        if (globalCallback != nullptr) {
+            env->DeleteGlobalRef(globalCallback);
+        }
+        globalCallback = env->NewGlobalRef(callback);
 
-    // Store the JavaVM instance
-    if (javaVM == nullptr) {
-        env->GetJavaVM(&javaVM);
-    }
+        if (javaVM == nullptr) {
+            env->GetJavaVM(&javaVM);
+        }
 
-    // Start the main routine with the native callback function
-    StartMainRoutine((char*)nativeAccessToken, (void*)myCallback);
+        StartMainRoutine((char*)nativeAccessToken, (void*)myCallback);
+    }
 
     env->ReleaseStringUTFChars(rawAccessToken, nativeAccessToken);
 }
@@ -71,5 +99,15 @@ Java_com_pawns_ndk_NativeLib_StartMainRoutine(JNIEnv* env, jobject obj, jstring 
 JNIEXPORT void JNICALL
 Java_com_pawns_ndk_NativeLib_StopMainRoutine(JNIEnv *env, jobject obj) {
     StopMainRoutine();
+
+    // Clean up the global callback reference
+    {
+        std::lock_guard<std::mutex> lock(callbackMutex);
+        if (globalCallback != nullptr) {
+            env->DeleteGlobalRef(globalCallback);
+            globalCallback = nullptr;
+        }
+    }
 }
+
 }
