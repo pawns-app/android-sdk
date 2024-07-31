@@ -65,7 +65,7 @@ void myCallback(char* message) {
 }
 
 JNIEXPORT void JNICALL
-Java_com_pawns_ndk_NativeLib_Initialize(JNIEnv *env, jobject obj, jstring rawDeviceID, jstring rawDeviceName) {
+Java_com_pawns_ndk_PawnsCore_Initialize(JNIEnv *env, jobject obj, jstring rawDeviceID, jstring rawDeviceName) {
     const char *cRawDeviceID = env->GetStringUTFChars(rawDeviceID, 0);
     const char *cRawDeviceName = env->GetStringUTFChars(rawDeviceName, 0);
 
@@ -76,7 +76,7 @@ Java_com_pawns_ndk_NativeLib_Initialize(JNIEnv *env, jobject obj, jstring rawDev
 }
 
 JNIEXPORT void JNICALL
-Java_com_pawns_ndk_NativeLib_StartMainRoutine(JNIEnv* env, jobject obj, jstring rawAccessToken, jobject callback) {
+Java_com_pawns_ndk_PawnsCore_StartMainRoutine(JNIEnv* env, jobject obj, jstring rawAccessToken, jobject callback) {
     const char* nativeAccessToken = env->GetStringUTFChars(rawAccessToken, 0);
 
     {
@@ -97,7 +97,7 @@ Java_com_pawns_ndk_NativeLib_StartMainRoutine(JNIEnv* env, jobject obj, jstring 
 }
 
 JNIEXPORT void JNICALL
-Java_com_pawns_ndk_NativeLib_StopMainRoutine(JNIEnv *env, jobject obj) {
+Java_com_pawns_ndk_PawnsCore_StopMainRoutine(JNIEnv *env, jobject obj) {
     StopMainRoutine();
 
     // Clean up the global callback reference

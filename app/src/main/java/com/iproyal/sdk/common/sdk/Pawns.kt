@@ -14,7 +14,7 @@ import com.iproyal.sdk.internal.service.PeerServiceBackground
 import com.iproyal.sdk.internal.service.PeerServiceForeground
 import com.iproyal.sdk.internal.util.DeviceIdHelper
 import com.iproyal.sdk.internal.util.SystemUtils
-import com.pawns.ndk.NativeLib
+import com.pawns.ndk.PawnsCore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -121,7 +121,7 @@ public class Pawns private constructor(
     private fun init(context: Context) {
         val deviceId = DeviceIdHelper.id(context)
         val deviceName = SystemUtils.getDeviceNameAndOsVersion()
-        NativeLib().Initialize(deviceId, deviceName)
+        PawnsCore.Initialize(deviceId, deviceName)
         dependencyProvider = DependencyProvider(context, serviceConfig)
     }
 

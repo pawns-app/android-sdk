@@ -1,6 +1,6 @@
 package com.pawns.ndk
 
-class NativeLib {
+object PawnsCore {
 
     external fun Initialize(rawDeviceID: String, rawDeviceName: String)
     external fun StartMainRoutine(rawAccessToken: String?, callback: Callback)
@@ -10,10 +10,8 @@ class NativeLib {
         fun onCallback(callback: String)
     }
 
-    companion object {
+    init {
         // Used to load the 'pawns_ndk' library on application startup.
-        init {
-            System.loadLibrary("pawns_ndk")
-        }
+        System.loadLibrary("pawns_ndk")
     }
 }

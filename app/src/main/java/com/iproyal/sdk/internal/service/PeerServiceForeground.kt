@@ -20,7 +20,7 @@ import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
 import com.iproyal.sdk.internal.util.PermissionUtil
-import com.pawns.ndk.NativeLib
+import com.pawns.ndk.PawnsCore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -186,7 +186,7 @@ internal class PeerServiceForeground : Service() {
         if (isSdkStarted) return
         isSdkStarted = true
         PawnsLogger.d(TAG, ("Started sharing"))
-        NativeLib().StartMainRoutine(Pawns.getInstance().apiKey, object: NativeLib.Callback {
+        PawnsCore.StartMainRoutine(Pawns.getInstance().apiKey, object: PawnsCore.Callback {
             override fun onCallback(callback: String) {
                 val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return
                 val event = dependencyProvider.jsonInstance.decodeFromString(SdkEvent.serializer(), callback)
@@ -238,7 +238,7 @@ internal class PeerServiceForeground : Service() {
     // Responsible for stopping SDK
     private fun stopSharing(state: ServiceState) {
         PawnsLogger.d(TAG, ("Stopped sharing"))
-        NativeLib().StopMainRoutine()
+        PawnsCore.StopMainRoutine()
         emitState(state)
         isSdkStarted = false
     }
