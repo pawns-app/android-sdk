@@ -1,23 +1,11 @@
 # Pawns Android SDK #
 
+![Pawns App](https://pawns.app/wp-content/uploads/2022/12/pawns-app-dark.svg)
+
 ## Internet Sharing Library ##
 
-This library sole purpose is to be distributed to other developers in order to provide them with capability of sharing internet to us through their own created applications.
-
-### Summary ###
-
-* [Documentation](https://iproyal.atlassian.net/wiki/spaces/IPROYAL/pages/251625485/Mobile+Sdk)
-
-### Local deployment ###
-
-Instructions on deploying library locally to your current computer in order to test and use this library
-
-* Go to Gradle scripts
-* Find section called **publishing**
-* Run task **publishToMavenLocal**
+All instructions for setting up the SDK and examples of working code can be found in the demo project. Please refer to the demo project documentation to get detailed steps and sample code implementations. This resource will guide you through the setup process and provide practical examples to ensure a smooth integration.
 
 ### Who do I talk to? ###
 
-* SDK Owner:           Laurynas M.   laurynas@iproyal.com
-* Core library Owner:  Justas V.     justas@iproyal.com
-* Product Owner:       Rokas P.      rokas.pocius@pawns.app
+All information about our product and how to contact us is available at the following link: [Pawns SDK Website](https://pawns.app/sdk/). Please visit this page for comprehensive details and support options.
