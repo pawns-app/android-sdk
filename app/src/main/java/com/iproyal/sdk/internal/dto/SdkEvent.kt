@@ -9,7 +9,6 @@ internal data class SdkEvent(
 )
 
 internal enum class SdkLifeCycleName(val sdkValue: String) {
-
     STARTING("starting"),
     NOT_RUNNING("not_running"),
     RUNNING("running"),

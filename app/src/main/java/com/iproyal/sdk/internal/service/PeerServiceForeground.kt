@@ -20,12 +20,14 @@ import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
 import com.iproyal.sdk.internal.util.PermissionUtil
+import com.iproyal.sdk.internal.util.runCatchingCoroutine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mobile_sdk.Mobile_sdk
@@ -35,7 +37,8 @@ internal class PeerServiceForeground : Service() {
 
     companion object {
         const val TAG = "PawnsSdkServiceForeground"
-        const val CHECK_INTERVAL: Long = 5 * 60 * 1000 // 5min
+        private const val OPTIMISATION_CHECK_INTERVAL: Long = 5 * 60 * 1000 // 5min
+        private const val ROUTINE_INTERVAL: Long = 30 * 1000 // 30sec
 
         fun performAction(context: Context, action: ServiceAction) {
             val intent = Intent(context, PeerServiceForeground::class.java)
@@ -58,6 +61,7 @@ internal class PeerServiceForeground : Service() {
     private var wakeLockTag: String = "com.iproyal.sdk:LOCK"
     private var isServiceStarted = false
     private var isSdkStarted = false
+    private var isSdkStartAllowedFromRoutine = true
 
     private fun start(startId: Int?) {
         val dependencyProvider = Pawns.getInstance().dependencyProvider
@@ -171,9 +175,11 @@ internal class PeerServiceForeground : Service() {
                     if (batteryLevel < 20 && !isCharging) {
                         stopSharing(ServiceState.Launched.LowBattery)
                     } else {
-                        startSharing()
+                        if (isSdkStartAllowedFromRoutine) {
+                            startSharing()
+                        }
                     }
-                    delay(CHECK_INTERVAL)
+                    delay(OPTIMISATION_CHECK_INTERVAL)
                 }
             }
         } catch (e: Exception) {
@@ -182,10 +188,13 @@ internal class PeerServiceForeground : Service() {
     }
 
     // Responsible for starting Internet sharing SDK
-    private fun startSharing() {
+    private suspend fun startSharing() {
         if (isSdkStarted) return
         isSdkStarted = true
+
         PawnsLogger.d(TAG, ("Started sharing"))
+        emitState(ServiceState.On)
+
         Mobile_sdk.startMainRoutine(Pawns.getInstance().apiKey) {
             val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return@startMainRoutine
             val event = dependencyProvider.jsonInstance.decodeFromString(SdkEvent.serializer(), it)
@@ -200,13 +209,22 @@ internal class PeerServiceForeground : Service() {
                 null -> null
                 else -> ServiceError.Unknown(event.parameters.error)
             }
-            val serviceState = when {
-                event.name == SdkLifeCycleName.STARTING.sdkValue -> ServiceState.On
-                event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError != null -> ServiceState.Launched.Error(sdkError)
-                else -> ServiceState.Launched.Running
+
+            PawnsLogger.d(TAG, "event: ${event.name} error: $sdkError")
+            if (event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError is ServiceError.Critical) {
+                serviceScope.launch {
+                    runCatchingCoroutine {
+                        isSdkStartAllowedFromRoutine = false
+                        stopSharing(ServiceState.Launched.Error(sdkError))
+                        delay(ROUTINE_INTERVAL)
+                        ensureActive()
+                        isSdkStartAllowedFromRoutine = true
+                        startSharing()
+                    }
+                }
+            } else {
+                emitState(event, sdkError)
             }
-            emitState(serviceState)
-            PawnsLogger.d(TAG, "state: $serviceState error: $sdkError")
         }
     }
 
@@ -248,6 +266,19 @@ internal class PeerServiceForeground : Service() {
         }
         Pawns.getInstance()._serviceState.value = state
         Pawns.getInstance().serviceListener?.onStateChange(state)
+    }
+
+    private fun emitState(event: SdkEvent, sdkError: ServiceError?) {
+        if(SdkLifeCycleName.values().map { it.sdkValue }.none { it == event.name }) return
+
+        val serviceState = when {
+            event.name == SdkLifeCycleName.RUNNING.sdkValue -> ServiceState.Launched.Running
+            event.name == SdkLifeCycleName.STARTING.sdkValue -> ServiceState.On
+            event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError != null -> ServiceState.Launched.Error(sdkError)
+            else -> ServiceState.On
+        }
+
+        emitState(serviceState)
     }
 
 }

@@ -14,11 +14,14 @@ import com.iproyal.sdk.internal.dto.SdkEvent
 import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
+import com.iproyal.sdk.internal.util.runCatchingCoroutine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mobile_sdk.Mobile_sdk
@@ -28,7 +31,8 @@ internal class PeerServiceBackground : Service() {
 
     companion object {
         const val TAG = "PawnsSdkServiceBackground"
-        const val CHECK_INTERVAL: Long = 2 * 60 * 1000 // 2min
+        private const val OPTIMISATION_CHECK_INTERVAL: Long = 2 * 60 * 1000 // 2min
+        private const val ROUTINE_INTERVAL: Long = 30 * 1000 // 30sec
 
         fun performAction(context: Context, action: ServiceAction) {
             val intent = Intent(context, PeerServiceBackground::class.java)
@@ -45,6 +49,7 @@ internal class PeerServiceBackground : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isServiceStarted = false
     private var isSdkStarted = false
+    private var isSdkStartAllowedFromRoutine = true
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         PawnsLogger.d(TAG, "Action received ${intent?.action}")
@@ -73,6 +78,10 @@ internal class PeerServiceBackground : Service() {
 
     // Responsible for starting PeerService
     private fun startService() {
+        if (!Pawns.isInitialised) {
+            PawnsLogger.e(TAG, "Instance is not initialised, make sure to initialise before using startSharing")
+            return
+        }
         try {
             if (isServiceStarted) return
             isServiceStarted = true
@@ -81,7 +90,7 @@ internal class PeerServiceBackground : Service() {
             emitState(ServiceState.On)
 
             serviceScope.launch {
-                while (isServiceStarted && isActive) {
+                while (isServiceStarted && isActive && Pawns.isInitialised) {
                     val batteryManager: BatteryManager? =
                         getSystemService(BATTERY_SERVICE) as? BatteryManager
                     val batteryLevel =
@@ -97,9 +106,11 @@ internal class PeerServiceBackground : Service() {
                     if (batteryLevel < 20 && !isCharging) {
                         stopSharing(ServiceState.Launched.LowBattery)
                     } else {
-                        startSharing()
+                        if (isSdkStartAllowedFromRoutine) {
+                            startSharing()
+                        }
                     }
-                    delay(CHECK_INTERVAL)
+                    delay(OPTIMISATION_CHECK_INTERVAL)
                 }
             }
         } catch (e: Exception) {
@@ -109,13 +120,12 @@ internal class PeerServiceBackground : Service() {
 
     // Responsible for starting Internet sharing SDK
     private fun startSharing() {
-        if (!Pawns.isInitialised) {
-            PawnsLogger.e(TAG, "Instance is not initialised, make sure to initialise before using startSharing")
-            return
-        }
         if (isSdkStarted) return
         isSdkStarted = true
-        PawnsLogger.d(TAG, ("Started sharing"))
+
+        PawnsLogger.d(PeerServiceForeground.TAG, ("Started sharing"))
+        emitState(ServiceState.On)
+
         Mobile_sdk.startMainRoutine(Pawns.getInstance().apiKey) {
             val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return@startMainRoutine
             val event = dependencyProvider.jsonInstance.decodeFromString(
@@ -133,16 +143,22 @@ internal class PeerServiceBackground : Service() {
                 null -> null
                 else -> ServiceError.Unknown(event.parameters.error)
             }
-            val serviceState = when {
-                event.name == SdkLifeCycleName.STARTING.sdkValue -> ServiceState.On
-                event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError != null -> ServiceState.Launched.Error(
-                    sdkError
-                )
 
-                else -> ServiceState.Launched.Running
+            PawnsLogger.d(PeerServiceForeground.TAG, "event: ${event.name} error: $sdkError")
+            if (event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError is ServiceError.Critical) {
+                serviceScope.launch {
+                    runCatchingCoroutine {
+                        isSdkStartAllowedFromRoutine = false
+                        stopSharing(ServiceState.Launched.Error(sdkError))
+                        delay(ROUTINE_INTERVAL)
+                        ensureActive()
+                        isSdkStartAllowedFromRoutine = true
+                        startSharing()
+                    }
+                }
+            } else {
+                emitState(event, sdkError)
             }
-            emitState(serviceState)
-            PawnsLogger.d(TAG, "state: $serviceState error: $sdkError")
         }
     }
 
@@ -157,6 +173,7 @@ internal class PeerServiceBackground : Service() {
             }
             isServiceStarted = false
             isSdkStarted = false
+            runCatching { serviceScope.cancel() }
             PawnsLogger.d(TAG, ("Stopped service"))
         } catch (e: Exception) {
             PawnsLogger.e(TAG, ("Failed to stop background service $e"))
@@ -179,6 +196,19 @@ internal class PeerServiceBackground : Service() {
         }
         Pawns.getInstance()._serviceState.value = state
         Pawns.getInstance().serviceListener?.onStateChange(state)
+    }
+
+    private fun emitState(event: SdkEvent, sdkError: ServiceError?) {
+        if(SdkLifeCycleName.values().map { it.sdkValue }.none { it == event.name }) return
+
+        val serviceState = when {
+            event.name == SdkLifeCycleName.RUNNING.sdkValue -> ServiceState.Launched.Running
+            event.name == SdkLifeCycleName.STARTING.sdkValue -> ServiceState.On
+            event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError != null -> ServiceState.Launched.Error(sdkError)
+            else -> ServiceState.On
+        }
+
+        emitState(serviceState)
     }
 
 }
