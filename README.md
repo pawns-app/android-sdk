@@ -4,7 +4,7 @@
 
 ## Internet Sharing Library ##
 
-All instructions for setting up the SDK and examples of working code can be found in the demo project. Please refer to the demo project documentation to get detailed steps and sample code implementations. This resource will guide you through the setup process and provide practical examples to ensure a smooth integration.
+All instructions for setting up the SDK and examples of working code can be found in the [demo project](https://github.com/pawns-app/android-pawns-sdk-demo). Please refer to the demo project documentation to get detailed steps and sample code implementations. This resource will guide you through the setup process and provide practical examples to ensure a smooth integration.
 
 ### Who do I talk to? ###
 
