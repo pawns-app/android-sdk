@@ -20,6 +20,7 @@ import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
 import com.iproyal.sdk.internal.util.PermissionUtil
+import com.pawns.ndk.PawnsCore
 import com.iproyal.sdk.internal.util.runCatchingCoroutine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +31,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import mobile_sdk.Mobile_sdk
 
 
 internal class PeerServiceForeground : Service() {
@@ -195,8 +195,9 @@ internal class PeerServiceForeground : Service() {
         PawnsLogger.d(TAG, ("Started sharing"))
         emitState(ServiceState.On)
 
-        Mobile_sdk.startMainRoutine(Pawns.getInstance().apiKey) {
-            val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return@startMainRoutine
+        PawnsCore.StartMainRoutine(Pawns.getInstance().apiKey, object: PawnsCore.Callback {
+            override fun onCallback(callback: String) {
+                val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return@startMainRoutine
             val event = dependencyProvider.jsonInstance.decodeFromString(SdkEvent.serializer(), it)
             val sdkError: ServiceError? = when (event.parameters?.error) {
                 SdkErrorType.NO_FREE_PORT.sdkValue -> ServiceError.Critical("Unable to open port")
@@ -226,6 +227,7 @@ internal class PeerServiceForeground : Service() {
                 emitState(event, sdkError)
             }
         }
+            }
     }
 
     // Responsible for stopping PeerService
@@ -253,7 +255,7 @@ internal class PeerServiceForeground : Service() {
     // Responsible for stopping SDK
     private fun stopSharing(state: ServiceState) {
         PawnsLogger.d(TAG, ("Stopped sharing"))
-        Mobile_sdk.stopMainRoutine()
+        PawnsCore.StopMainRoutine()
         emitState(state)
         isSdkStarted = false
     }

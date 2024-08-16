@@ -2,11 +2,10 @@ plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
     id 'org.jetbrains.kotlin.plugin.serialization'
-    id 'com.kezong.fat-aar'
     id 'org.jetbrains.dokka'
 }
 apply {
-    from 'publish.gradle'
+    from '../publish.gradle'
 }
 
 android {
@@ -27,27 +26,25 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
     kotlinOptions {
         freeCompilerArgs += '-Xexplicit-api=strict'
     }
     packagingOptions {
         jniLibs {
-            useLegacyPackaging = true
+            useLegacyPackaging true
             keepDebugSymbols.add("**/*.so")
         }
     }
 }
 
 dependencies {
-    // Hack with plugin fat-aar-android https://github.com/kezong/fat-aar-android
-    embed project(path: ':pawns-core', configuration: 'default')
-
+    api project(':pawns-ndk')
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:$serialization_version"
     implementation "androidx.core:core-ktx:1.12.0"
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
