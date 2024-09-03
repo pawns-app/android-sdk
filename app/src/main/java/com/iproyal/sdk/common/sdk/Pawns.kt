@@ -34,7 +34,7 @@ public class Pawns private constructor(
 
         internal val isInitialised: Boolean
             get() {
-                return _instance != null && _instance?.apiKey != null
+                return _instance != null && _instance?.apiKey != null && PawnsCore.isNdkLoaded
             }
 
         /**
@@ -121,7 +121,11 @@ public class Pawns private constructor(
     private fun init(context: Context) {
         val deviceId = DeviceIdHelper.id(context)
         val deviceName = SystemUtils.getDeviceNameAndOsVersion()
-        PawnsCore.Initialize(deviceId, deviceName)
+        if (PawnsCore.isNdkLoaded) {
+            PawnsCore.Initialize(deviceId, deviceName)
+        } else {
+            PawnsLogger.e(TAG, "Failed to initialise PawnsNdk")
+        }
         dependencyProvider = DependencyProvider(context, serviceConfig)
     }
 

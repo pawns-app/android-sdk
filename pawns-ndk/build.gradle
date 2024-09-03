@@ -9,7 +9,7 @@ afterEvaluate {
         publications {
             release(MavenPublication) {
                 groupId = 'com.iproyal.sdk'
-                version = '1.0.0'
+                version = '1.0.0.1'
                 from components.release
             }
         }
@@ -38,6 +38,7 @@ android {
 
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+            debugSymbolLevel 'SYMBOL_TABLE'
         }
     }
 

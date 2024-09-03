@@ -197,37 +197,37 @@ internal class PeerServiceForeground : Service() {
 
         PawnsCore.StartMainRoutine(Pawns.getInstance().apiKey, object: PawnsCore.Callback {
             override fun onCallback(callback: String) {
-                val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return@startMainRoutine
-            val event = dependencyProvider.jsonInstance.decodeFromString(SdkEvent.serializer(), it)
-            val sdkError: ServiceError? = when (event.parameters?.error) {
-                SdkErrorType.NO_FREE_PORT.sdkValue -> ServiceError.Critical("Unable to open port")
-                SdkErrorType.NON_RESIDENTIAL.sdkValue -> ServiceError.Critical("IP address is not suitable for internet sharing")
-                SdkErrorType.UNSUPPORTED.sdkValue -> ServiceError.Critical("Library version is too old and is no longer supported")
-                SdkErrorType.UNAUTHORISED.sdkValue -> ServiceError.Critical("ApiKey is incorrect or expired")
-                SdkErrorType.LOST_CONNECTION.sdkValue -> ServiceError.General("Lost connection")
-                SdkErrorType.IP_USED.sdkValue -> ServiceError.General("This IP is already in use")
-                SdkErrorType.PEER_ALIVE_FAILED.sdkValue -> ServiceError.General("Internal error")
-                null -> null
-                else -> ServiceError.Unknown(event.parameters.error)
-            }
-
-            PawnsLogger.d(TAG, "event: ${event.name} error: $sdkError")
-            if (event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError is ServiceError.Critical) {
-                serviceScope.launch {
-                    runCatchingCoroutine {
-                        isSdkStartAllowedFromRoutine = false
-                        stopSharing(ServiceState.Launched.Error(sdkError))
-                        delay(ROUTINE_INTERVAL)
-                        ensureActive()
-                        isSdkStartAllowedFromRoutine = true
-                        startSharing()
-                    }
+                val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return
+                val event = dependencyProvider.jsonInstance.decodeFromString(SdkEvent.serializer(), callback)
+                val sdkError: ServiceError? = when (event.parameters?.error) {
+                    SdkErrorType.NO_FREE_PORT.sdkValue -> ServiceError.Critical("Unable to open port")
+                    SdkErrorType.NON_RESIDENTIAL.sdkValue -> ServiceError.Critical("IP address is not suitable for internet sharing")
+                    SdkErrorType.UNSUPPORTED.sdkValue -> ServiceError.Critical("Library version is too old and is no longer supported")
+                    SdkErrorType.UNAUTHORISED.sdkValue -> ServiceError.Critical("ApiKey is incorrect or expired")
+                    SdkErrorType.LOST_CONNECTION.sdkValue -> ServiceError.General("Lost connection")
+                    SdkErrorType.IP_USED.sdkValue -> ServiceError.General("This IP is already in use")
+                    SdkErrorType.PEER_ALIVE_FAILED.sdkValue -> ServiceError.General("Internal error")
+                    null -> null
+                    else -> ServiceError.Unknown(event.parameters.error)
                 }
-            } else {
-                emitState(event, sdkError)
+
+                PawnsLogger.d(TAG, "event: ${event.name} error: $sdkError")
+                if (event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError is ServiceError.Critical) {
+                    serviceScope.launch {
+                        runCatchingCoroutine {
+                            isSdkStartAllowedFromRoutine = false
+                            stopSharing(ServiceState.Launched.Error(sdkError))
+                            delay(ROUTINE_INTERVAL)
+                            ensureActive()
+                            isSdkStartAllowedFromRoutine = true
+                            startSharing()
+                        }
+                    }
+                } else {
+                    emitState(event, sdkError)
+                }
             }
-        }
-            }
+        })
     }
 
     // Responsible for stopping PeerService
