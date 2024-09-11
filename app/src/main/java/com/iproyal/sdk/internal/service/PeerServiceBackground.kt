@@ -14,6 +14,7 @@ import com.iproyal.sdk.internal.dto.SdkEvent
 import com.iproyal.sdk.internal.dto.SdkLifeCycleName
 import com.iproyal.sdk.internal.dto.ServiceAction
 import com.iproyal.sdk.internal.logger.PawnsLogger
+import com.iproyal.sdk.internal.network.NetworkChecker
 import com.iproyal.sdk.internal.util.runCatchingCoroutine
 import com.pawns.ndk.PawnsCore
 import kotlinx.coroutines.CoroutineScope
@@ -46,6 +47,7 @@ internal class PeerServiceBackground : Service() {
         }
     }
 
+    private val networkChecker: NetworkChecker = NetworkChecker()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isServiceStarted = false
     private var isSdkStarted = false
@@ -103,11 +105,18 @@ internal class PeerServiceBackground : Service() {
                             plugged == BatteryManager.BATTERY_PLUGGED_USB ||
                             plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS
 
-                    if (batteryLevel < 20 && !isCharging) {
-                        stopSharing(ServiceState.Launched.LowBattery)
-                    } else {
-                        if (isSdkStartAllowedFromRoutine) {
-                            startSharing()
+                    when {
+                        batteryLevel < 20 && !isCharging -> {
+                            stopSharing(ServiceState.Launched.LowBattery)
+                        }
+                        networkChecker.isVPNDetected(this@PeerServiceBackground) -> {
+                            PawnsLogger.d(TAG, "Optimisation routine detected VPN service")
+                            stopSharing(ServiceState.Launched.Error(ServiceError.Critical("VPN is not allowed, waiting on VPN to be disabled")))
+                        }
+                        else -> {
+                            if (isSdkStartAllowedFromRoutine) {
+                                startSharing()
+                            }
                         }
                     }
                     delay(OPTIMISATION_CHECK_INTERVAL)
@@ -123,42 +132,51 @@ internal class PeerServiceBackground : Service() {
         if (isSdkStarted) return
         isSdkStarted = true
 
-        PawnsLogger.d(PeerServiceForeground.TAG, ("Started sharing"))
+        PawnsLogger.d(TAG, "Started sharing")
         emitState(ServiceState.On)
 
         PawnsCore.StartMainRoutine(Pawns.getInstance().apiKey, object : PawnsCore.Callback {
             override fun onCallback(callback: String) {
+                if (!isSdkStarted) return
+                val isVpnDetected = networkChecker.isVPNDetected(this@PeerServiceBackground)
                 val dependencyProvider = Pawns.getInstance().dependencyProvider ?: return
-                val event = dependencyProvider.jsonInstance.decodeFromString(
-                    SdkEvent.serializer(),
-                    callback
-                )
-                val sdkError: ServiceError? = when (event.parameters?.error) {
-                    SdkErrorType.NO_FREE_PORT.sdkValue -> ServiceError.Critical("Unable to open port")
-                    SdkErrorType.NON_RESIDENTIAL.sdkValue -> ServiceError.Critical("IP address is not suitable for internet sharing")
-                    SdkErrorType.UNSUPPORTED.sdkValue -> ServiceError.Critical("Library version is too old and is no longer supported")
-                    SdkErrorType.UNAUTHORISED.sdkValue -> ServiceError.Critical("ApiKey is incorrect or expired")
-                    SdkErrorType.LOST_CONNECTION.sdkValue -> ServiceError.General("Lost connection")
-                    SdkErrorType.IP_USED.sdkValue -> ServiceError.General("This IP is already in use")
-                    SdkErrorType.PEER_ALIVE_FAILED.sdkValue -> ServiceError.General("Internal error")
-                    null -> null
+                val event = dependencyProvider.jsonInstance.decodeFromString(SdkEvent.serializer(), callback)
+                val sdkError: ServiceError? = when {
+                    isVpnDetected -> ServiceError.Critical("VPN is not allowed, waiting on VPN to be disabled")
+                    event.parameters?.error == SdkErrorType.NO_FREE_PORT.sdkValue -> ServiceError.Critical("Unable to open port")
+                    event.parameters?.error == SdkErrorType.NON_RESIDENTIAL.sdkValue -> ServiceError.Critical("IP address is not suitable for internet sharing")
+                    event.parameters?.error == SdkErrorType.UNSUPPORTED.sdkValue -> ServiceError.Critical("Library version is too old and is no longer supported")
+                    event.parameters?.error == SdkErrorType.UNAUTHORISED.sdkValue -> ServiceError.Critical("ApiKey is incorrect or expired")
+                    event.parameters?.error == SdkErrorType.LOST_CONNECTION.sdkValue -> ServiceError.General("Lost connection")
+                    event.parameters?.error == SdkErrorType.IP_USED.sdkValue -> ServiceError.General("This IP is already in use")
+                    event.parameters?.error == SdkErrorType.PEER_ALIVE_FAILED.sdkValue -> ServiceError.General("Internal error")
+                    event.parameters?.error == null -> null
                     else -> ServiceError.Unknown(event.parameters.error)
                 }
 
-                PawnsLogger.d(PeerServiceForeground.TAG, "event: ${event.name} error: $sdkError")
-                if (event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError is ServiceError.Critical) {
-                    serviceScope.launch {
-                        runCatchingCoroutine {
-                            isSdkStartAllowedFromRoutine = false
-                            stopSharing(ServiceState.Launched.Error(sdkError))
-                            delay(ROUTINE_INTERVAL)
-                            ensureActive()
-                            isSdkStartAllowedFromRoutine = true
-                            startSharing()
+                PawnsLogger.d(TAG, "event: ${event.name} error: $sdkError")
+                when {
+                    event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError is ServiceError.Critical && !isVpnDetected -> {
+                        PawnsLogger.d(TAG, "Launching critical error fallback routine")
+                        serviceScope.launch {
+                            runCatchingCoroutine {
+                                isSdkStartAllowedFromRoutine = false
+                                stopSharing(ServiceState.Launched.Error(sdkError))
+                                delay(ROUTINE_INTERVAL)
+                                ensureActive()
+                                isSdkStartAllowedFromRoutine = true
+                                startSharing()
+                            }
                         }
                     }
-                } else {
-                    emitState(event, sdkError)
+                    // Stop Sharing and allow optimisation flow to start if VPN is not detected after a while
+                    isVpnDetected -> {
+                        PawnsLogger.d(TAG, "Core routine detected VPN service and stopped sharing")
+                        stopSharing(ServiceState.Launched.Error(ServiceError.Critical("VPN is not allowed, waiting on VPN to be disabled")))
+                    }
+                    else -> {
+                        emitState(event, sdkError)
+                    }
                 }
             }
         })
