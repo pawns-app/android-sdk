@@ -8,8 +8,8 @@ afterEvaluate {
     publishing {
         publications {
             release(MavenPublication) {
-                groupId = 'com.iproyal.sdk'
-                version = '1.0.0.2'
+                groupId = 'com.pawns.sdk'
+                version = '1.0.0'
                 from components.release
             }
         }

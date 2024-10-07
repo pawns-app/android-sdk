@@ -9,7 +9,7 @@ apply {
 }
 
 android {
-    namespace 'com.iproyal.sdk'
+    namespace 'com.pawns.sdk'
     compileSdk 34
 
     defaultConfig {

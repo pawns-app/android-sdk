@@ -15,7 +15,7 @@
 
 # Keep public classes
 
--keep public class com.iproyal.sdk.common.** { *; }
+-keep public class com.pawns.sdk.common.** { *; }
 
 # Save the obfuscation mapping to a file, so we can de-obfuscate any stack
 # traces later on. Keep a fixed source file attribute and all line number
