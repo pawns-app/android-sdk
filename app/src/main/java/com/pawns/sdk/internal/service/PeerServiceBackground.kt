@@ -75,6 +75,7 @@ internal class PeerServiceBackground : Service() {
 
     override fun onDestroy() {
         emitState(ServiceState.Off)
+        PawnsCore.StopMainRoutine()
         super.onDestroy()
     }
 

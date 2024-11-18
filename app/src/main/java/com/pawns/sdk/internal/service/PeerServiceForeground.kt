@@ -142,6 +142,7 @@ internal class PeerServiceForeground : Service() {
             }
         }
             .onFailure { PawnsLogger.e(TAG, it.message.orEmpty()) }
+        PawnsCore.StopMainRoutine()
         super.onDestroy()
     }
 
