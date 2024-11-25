@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.ServiceCompat
+import com.pawns.ndk.PawnsCore
 import com.pawns.sdk.common.dto.ServiceError
 import com.pawns.sdk.common.dto.ServiceState
 import com.pawns.sdk.common.sdk.Pawns
@@ -22,7 +23,6 @@ import com.pawns.sdk.internal.logger.PawnsLogger
 import com.pawns.sdk.internal.network.NetworkChecker
 import com.pawns.sdk.internal.util.PermissionUtil
 import com.pawns.sdk.internal.util.runCatchingCoroutine
-import com.pawns.ndk.PawnsCore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -59,6 +59,7 @@ internal class PeerServiceForeground : Service() {
 
     private val networkChecker: NetworkChecker = NetworkChecker()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val coreScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var wakeLock: PowerManager.WakeLock? = null
     private var wakeLockTag: String = "com.pawns.sdk:LOCK"
     private var isServiceStarted = false
@@ -120,15 +121,15 @@ internal class PeerServiceForeground : Service() {
         if (Build.VERSION.SDK_INT == Build.VERSION_CODES.M && Build.MANUFACTURER.equals("Huawei")) {
             wakeLockTag = "LocationManagerService"
         }
-        if (!Pawns.isInitialised) {
-            PawnsLogger.e(TAG, "Instance is not initialised, cannot create service")
-            stopService(-1)
-            return
-        }
         try {
             start(null)
         } catch (e: Exception) {
             PawnsLogger.e(TAG, "Failed to create foreground service $e")
+        }
+        if (!Pawns.isInitialised) {
+            PawnsLogger.e(TAG, "Instance is not initialised, cannot create service")
+            stopService(-1)
+            return
         }
     }
 
@@ -157,6 +158,7 @@ internal class PeerServiceForeground : Service() {
             isServiceStarted = true
             PawnsLogger.d(TAG, ("Started service"))
             serviceScope.coroutineContext.cancelChildren()
+            coreScope.coroutineContext.cancelChildren()
             emitState(ServiceState.On)
             wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
                 newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, wakeLockTag).apply {
@@ -280,9 +282,9 @@ internal class PeerServiceForeground : Service() {
     // Responsible for stopping SDK
     private fun stopSharing(state: ServiceState) {
         PawnsLogger.d(TAG, ("Stopped sharing"))
-        PawnsCore.StopMainRoutine()
         emitState(state)
         isSdkStarted = false
+        coreScope.launch { PawnsCore.StopMainRoutine() }
     }
 
     // Triggers state change for coroutines flow and for listener
