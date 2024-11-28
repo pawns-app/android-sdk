@@ -23,8 +23,9 @@ public sealed class ServiceState {
 
         /**
          * Internet sharing flow is running and working as expected
+         * @param traffic provides information on current internet traffic
          */
-        public object Running: Launched()
+        public data class Running(val traffic: Int?): Launched()
 
         /**
          * Service is running, but hosting device has low battery

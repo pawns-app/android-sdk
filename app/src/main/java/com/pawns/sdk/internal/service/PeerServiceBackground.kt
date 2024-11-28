@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.IBinder
+import com.pawns.ndk.PawnsCore
 import com.pawns.sdk.common.dto.ServiceError
 import com.pawns.sdk.common.dto.ServiceState
 import com.pawns.sdk.common.sdk.Pawns
@@ -16,7 +17,6 @@ import com.pawns.sdk.internal.dto.ServiceAction
 import com.pawns.sdk.internal.logger.PawnsLogger
 import com.pawns.sdk.internal.network.NetworkChecker
 import com.pawns.sdk.internal.util.runCatchingCoroutine
-import com.pawns.ndk.PawnsCore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,6 +49,7 @@ internal class PeerServiceBackground : Service() {
 
     private val networkChecker: NetworkChecker = NetworkChecker()
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val coreScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isServiceStarted = false
     private var isSdkStarted = false
     private var isSdkStartAllowedFromRoutine = true
@@ -90,6 +91,7 @@ internal class PeerServiceBackground : Service() {
             isServiceStarted = true
             PawnsLogger.d(TAG, ("Started service"))
             serviceScope.coroutineContext.cancelChildren()
+            coreScope.coroutineContext.cancelChildren()
             emitState(ServiceState.On)
 
             serviceScope.launch {
@@ -110,10 +112,12 @@ internal class PeerServiceBackground : Service() {
                         batteryLevel < 20 && !isCharging -> {
                             stopSharing(ServiceState.Launched.LowBattery)
                         }
+
                         networkChecker.isVPNDetected(this@PeerServiceBackground) -> {
                             PawnsLogger.d(TAG, "Optimisation routine detected VPN service")
                             stopSharing(ServiceState.Launched.Error(ServiceError.Critical("VPN is not allowed, waiting on VPN to be disabled")))
                         }
+
                         else -> {
                             if (isSdkStartAllowedFromRoutine) {
                                 startSharing()
@@ -155,7 +159,12 @@ internal class PeerServiceBackground : Service() {
                     else -> ServiceError.Unknown(event.parameters.error)
                 }
 
-                PawnsLogger.d(TAG, "event: ${event.name} error: $sdkError")
+                PawnsLogger.d(
+                    TAG,
+                    "event: ${event.name}" +
+                            if (event.parameters?.traffic != null) " ${event.parameters.traffic} " else " " +
+                                    "error: $sdkError"
+                )
                 when {
                     event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError is ServiceError.Critical && !isVpnDetected -> {
                         PawnsLogger.d(TAG, "Launching critical error fallback routine")
@@ -175,6 +184,7 @@ internal class PeerServiceBackground : Service() {
                         PawnsLogger.d(TAG, "Core routine detected VPN service and stopped sharing")
                         stopSharing(ServiceState.Launched.Error(ServiceError.Critical("VPN is not allowed, waiting on VPN to be disabled")))
                     }
+
                     else -> {
                         emitState(event, sdkError)
                     }
@@ -204,9 +214,9 @@ internal class PeerServiceBackground : Service() {
     // Responsible for stopping SDK
     private fun stopSharing(state: ServiceState) {
         PawnsLogger.d(TAG, ("Stopped sharing"))
-        PawnsCore.StopMainRoutine()
         emitState(state)
         isSdkStarted = false
+        coreScope.launch { PawnsCore.StopMainRoutine() }
     }
 
     // Triggers state change for coroutines flow and for listener
@@ -220,10 +230,12 @@ internal class PeerServiceBackground : Service() {
     }
 
     private fun emitState(event: SdkEvent, sdkError: ServiceError?) {
-        if(SdkLifeCycleName.values().map { it.sdkValue }.none { it == event.name }) return
+        if (SdkLifeCycleName.values().map { it.sdkValue }.none { it == event.name }) return
 
         val serviceState = when {
-            event.name == SdkLifeCycleName.RUNNING.sdkValue -> ServiceState.Launched.Running
+            event.name == SdkLifeCycleName.RUNNING.sdkValue ||
+                    event.name == SdkLifeCycleName.TRAFFIC.sdkValue -> ServiceState.Launched.Running(event.parameters?.traffic?.toIntOrNull())
+
             event.name == SdkLifeCycleName.STARTING.sdkValue -> ServiceState.On
             event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError != null -> ServiceState.Launched.Error(sdkError)
             else -> ServiceState.On

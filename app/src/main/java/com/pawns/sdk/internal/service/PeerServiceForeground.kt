@@ -228,7 +228,12 @@ internal class PeerServiceForeground : Service() {
                     else -> ServiceError.Unknown(event.parameters.error)
                 }
 
-                PawnsLogger.d(TAG, "event: ${event.name} error: $sdkError")
+                PawnsLogger.d(
+                    TAG,
+                    "event: ${event.name}" +
+                            if (event.parameters?.traffic != null) " ${event.parameters.traffic} " else " " +
+                                    "error: $sdkError"
+                )
                 when {
                     event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError is ServiceError.Critical && !isVpnDetected -> {
                         PawnsLogger.d(TAG, "Launching critical error fallback routine")
@@ -301,7 +306,9 @@ internal class PeerServiceForeground : Service() {
         if (SdkLifeCycleName.values().map { it.sdkValue }.none { it == event.name }) return
 
         val serviceState = when {
-            event.name == SdkLifeCycleName.RUNNING.sdkValue -> ServiceState.Launched.Running
+            event.name == SdkLifeCycleName.RUNNING.sdkValue ||
+                    event.name == SdkLifeCycleName.TRAFFIC.sdkValue -> ServiceState.Launched.Running(event.parameters?.traffic?.toIntOrNull())
+
             event.name == SdkLifeCycleName.STARTING.sdkValue -> ServiceState.On
             event.name == SdkLifeCycleName.NOT_RUNNING.sdkValue && sdkError != null -> ServiceState.Launched.Error(sdkError)
             else -> ServiceState.On
