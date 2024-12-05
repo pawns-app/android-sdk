@@ -26,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 
 internal class PeerServiceBackground : Service() {
@@ -34,6 +35,7 @@ internal class PeerServiceBackground : Service() {
         const val TAG = "PawnsSdkServiceBackground"
         private const val OPTIMISATION_CHECK_INTERVAL: Long = 2 * 60 * 1000 // 2min
         private const val ROUTINE_INTERVAL: Long = 30 * 1000 // 30sec
+        private const val ROUTINE_INTERVAL_MAX: Long = 300 * 1000 // 5min
 
         fun performAction(context: Context, action: ServiceAction) {
             val intent = Intent(context, PeerServiceBackground::class.java)
@@ -53,6 +55,7 @@ internal class PeerServiceBackground : Service() {
     private var isServiceStarted = false
     private var isSdkStarted = false
     private var isSdkStartAllowedFromRoutine = true
+    private var connectionFailedTimes = 0
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         PawnsLogger.d(TAG, "Action received ${intent?.action}")
@@ -76,7 +79,7 @@ internal class PeerServiceBackground : Service() {
 
     override fun onDestroy() {
         emitState(ServiceState.Off)
-        PawnsCore.StopMainRoutine()
+        coreScope.launch { PawnsCore.StopMainRoutine() }
         super.onDestroy()
     }
 
@@ -89,6 +92,7 @@ internal class PeerServiceBackground : Service() {
         try {
             if (isServiceStarted) return
             isServiceStarted = true
+            connectionFailedTimes = 0
             PawnsLogger.d(TAG, ("Started service"))
             serviceScope.coroutineContext.cancelChildren()
             coreScope.coroutineContext.cancelChildren()
@@ -155,6 +159,7 @@ internal class PeerServiceBackground : Service() {
                     event.parameters?.error == SdkErrorType.LOST_CONNECTION.sdkValue -> ServiceError.General("Lost connection")
                     event.parameters?.error == SdkErrorType.IP_USED.sdkValue -> ServiceError.General("This IP is already in use")
                     event.parameters?.error == SdkErrorType.PEER_ALIVE_FAILED.sdkValue -> ServiceError.General("Internal error")
+                    event.parameters?.error == SdkErrorType.CANT_OPEN_PORT.sdkValue -> ServiceError.General("Unable to open port")
                     event.parameters?.error == null -> null
                     else -> ServiceError.Unknown(event.parameters.error)
                 }
@@ -172,7 +177,11 @@ internal class PeerServiceBackground : Service() {
                             runCatchingCoroutine {
                                 isSdkStartAllowedFromRoutine = false
                                 stopSharing(ServiceState.Launched.Error(sdkError))
-                                delay(ROUTINE_INTERVAL)
+                                connectionFailedTimes += 1
+                                val exponentialDelay = (ROUTINE_INTERVAL * connectionFailedTimes.coerceAtLeast(1))
+                                    .coerceAtMost(ROUTINE_INTERVAL_MAX) + Random.nextInt(1000, 10001)
+                                PawnsLogger.d(PeerServiceForeground.TAG, "Critical error fallback routine started $exponentialDelay")
+                                delay(exponentialDelay)
                                 ensureActive()
                                 isSdkStartAllowedFromRoutine = true
                                 startSharing()
@@ -181,11 +190,13 @@ internal class PeerServiceBackground : Service() {
                     }
                     // Stop Sharing and allow optimisation flow to start if VPN is not detected after a while
                     isVpnDetected -> {
+                        connectionFailedTimes = 0
                         PawnsLogger.d(TAG, "Core routine detected VPN service and stopped sharing")
                         stopSharing(ServiceState.Launched.Error(ServiceError.Critical("VPN is not allowed, waiting on VPN to be disabled")))
                     }
 
                     else -> {
+                        connectionFailedTimes = 0
                         emitState(event, sdkError)
                     }
                 }
@@ -204,6 +215,7 @@ internal class PeerServiceBackground : Service() {
             }
             isServiceStarted = false
             isSdkStarted = false
+            connectionFailedTimes = 0
             runCatching { serviceScope.cancel() }
             PawnsLogger.d(TAG, ("Stopped service"))
         } catch (e: Exception) {
