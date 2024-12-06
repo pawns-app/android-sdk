@@ -1,9 +1,10 @@
 package com.pawns.sdk.common.sdk
 
-import android.app.Notification
 import android.content.Context
 import android.util.Log
+import com.pawns.ndk.PawnsCore
 import com.pawns.sdk.common.dto.ServiceConfig
+import com.pawns.sdk.common.dto.ServiceNotification
 import com.pawns.sdk.common.dto.ServiceState
 import com.pawns.sdk.common.dto.ServiceType
 import com.pawns.sdk.common.listener.PawnsServiceListener
@@ -14,20 +15,20 @@ import com.pawns.sdk.internal.service.PeerServiceBackground
 import com.pawns.sdk.internal.service.PeerServiceForeground
 import com.pawns.sdk.internal.util.DeviceIdHelper
 import com.pawns.sdk.internal.util.SystemUtils
-import com.pawns.ndk.PawnsCore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 public class Pawns private constructor(
     internal val apiKey: String?,
     internal val serviceConfig: ServiceConfig,
-    internal val serviceType: ServiceType
+    internal val serviceType: ServiceType,
+    internal val serviceNotification: ServiceNotification?,
 ) {
 
     public companion object {
         internal const val TAG = "PawnsSdk"
 
-        private val uninitialisedInstance = Pawns(null, ServiceConfig(), ServiceType.BACKGROUND)
+        private val uninitialisedInstance = Pawns(null, ServiceConfig(), ServiceType.BACKGROUND, null)
 
         @Volatile
         private var _instance: Pawns? = null
@@ -53,7 +54,8 @@ public class Pawns private constructor(
     private constructor(builder: Builder) : this(
         builder.apiKey,
         builder.serviceConfig,
-        builder.serviceType
+        builder.serviceType,
+        builder.serviceNotification
     )
 
     /**
@@ -67,6 +69,7 @@ public class Pawns private constructor(
         internal var serviceConfig: ServiceConfig = ServiceConfig()
         internal var isLoggingEnabled: Boolean = false
         internal var serviceType: ServiceType = ServiceType.FOREGROUND
+        internal var serviceNotification: ServiceNotification? = null
 
         /**
          * Mandatory method. It allows SDK to recognise and authorize the use of our service.
@@ -100,6 +103,13 @@ public class Pawns private constructor(
             apply { this.serviceType = serviceType }
 
         /**
+         * Optional method. Allows to pass a your own notification that matches your already running foreground service notification.
+         * This way Pawns SDK will not prompt user an additional notification when service is running.
+         */
+        public fun customNotification(serviceNotification: ServiceNotification): Builder =
+            apply { this.serviceNotification = serviceNotification }
+
+        /**
          * Mandatory method. Final method to build PawnsSdk instance for later usage.
          */
         public fun build() {
@@ -127,6 +137,12 @@ public class Pawns private constructor(
             PawnsLogger.e(TAG, "Failed to initialise PawnsNdk")
         }
         dependencyProvider = DependencyProvider(context, serviceConfig)
+
+        if (serviceType == ServiceType.FOREGROUND && serviceNotification == null) {
+            dependencyProvider?.notificationManager?.initNotificationChannel()
+        } else {
+            dependencyProvider?.notificationManager?.setExternalNotification(serviceNotification)
+        }
     }
 
     /**
@@ -174,34 +190,17 @@ public class Pawns private constructor(
 
     /**
      * Runs PawnsSdk Internet sharing service and starts updating its state.
-     */
-    public fun startSharing(context: Context) {
-        startSharing(context, null, null)
-    }
-
-    /**
-     * Runs PawnsSdk Internet sharing service and starts updating its state.
      * Optional method to use in case you want a full control of notification that is displayed or already have a running foreground service
      * and you want to reuse/combine your notification instead of SDK displaying default notification.
-     * @param notification - Notification object that must match your current foreground service notification (same channel)
-     * @param notificationId - Same notification id that you passed to startForeground when launching your existing service
      */
-    public fun startSharing(context: Context, notification: Notification?, notificationId: Int?) {
+    public fun startSharing(context: Context) {
         if (!isInitialised) {
             PawnsLogger.e(TAG, "Instance is not initialised, make sure to initialise before using startSharing")
             return
         }
         if (!SystemUtils.isServiceRunning(context)) {
             when (getInstance().serviceType) {
-                ServiceType.FOREGROUND -> {
-                    if (notification == null || notificationId == null) {
-                        dependencyProvider?.notificationManager?.initNotificationChannel()
-                    } else {
-                        dependencyProvider?.notificationManager?.setExternalNotification(notification, notificationId)
-                    }
-                    PeerServiceForeground.performAction(context, ServiceAction.START_PAWNS_SERVICE)
-                }
-
+                ServiceType.FOREGROUND -> PeerServiceForeground.performAction(context, ServiceAction.START_PAWNS_SERVICE)
                 ServiceType.BACKGROUND -> PeerServiceBackground.performAction(context, ServiceAction.START_PAWNS_SERVICE)
             }
         }

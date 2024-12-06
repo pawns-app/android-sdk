@@ -13,6 +13,7 @@ import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.pawns.sdk.common.dto.ServiceConfig
+import com.pawns.sdk.common.dto.ServiceNotification
 import com.pawns.sdk.common.dto.ServiceNotificationPriority
 
 
@@ -42,8 +43,7 @@ internal class NotificationManager constructor(
     }
 
     // Provided by consumer, who wishes to combine existing foreground service notification with ours
-    private var externalNotification: Notification? = null
-    private var externalNotificationId: Int? = null
+    private var externalNotification: ServiceNotification? = null
 
     internal fun initNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -76,7 +76,7 @@ internal class NotificationManager constructor(
 
     internal fun createServiceNotification(): Notification {
         val currentExternalNotification = externalNotification
-        if (currentExternalNotification != null) return currentExternalNotification
+        if (currentExternalNotification != null) return currentExternalNotification.notification
 
         val launchIntent = serviceConfig.launcherIntent ?: context.packageManager.getLaunchIntentForPackage(context.packageName)
         val pendingIntent = launchIntent?.let {
@@ -110,13 +110,12 @@ internal class NotificationManager constructor(
         return serviceNotificationBuilder.build()
     }
 
-    internal fun setExternalNotification(notification: Notification, notificationId: Int) {
-        externalNotification = notification
-        externalNotificationId = notificationId
+    internal fun setExternalNotification(serviceNotification: ServiceNotification?) {
+        externalNotification = serviceNotification
     }
 
     internal fun getNotificationId(): Int {
-        return externalNotificationId ?: CHANNEL_SERVICE_MESSAGE_ID
+        return externalNotification?.notificationId ?: CHANNEL_SERVICE_MESSAGE_ID
     }
 
 }
