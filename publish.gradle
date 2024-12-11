@@ -11,7 +11,7 @@ afterEvaluate {
             release(MavenPublication) {
                 groupId = 'com.pawns.sdk'
                 artifactId = 'internet-sharing'
-                version = '1.3.2'
+                version = '1.4.0'
 
                 afterEvaluate {
                     from components.release
