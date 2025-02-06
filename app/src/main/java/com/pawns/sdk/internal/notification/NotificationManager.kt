@@ -36,12 +36,6 @@ internal class NotificationManager constructor(
     private val serviceNotificationBuilder: NotificationCompat.Builder =
         NotificationCompat.Builder(context, SERVICE_CHANNEL_ID)
 
-    private val options = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle()
-    } else {
-        null
-    }
-
     // Provided by consumer, who wishes to combine existing foreground service notification with ours
     private var externalNotification: ServiceNotification? = null
 
@@ -84,7 +78,6 @@ internal class NotificationManager constructor(
                 context, CHANNEL_SERVICE_MESSAGE_ID,
                 it,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                options
             )
         }
 
@@ -110,7 +103,7 @@ internal class NotificationManager constructor(
         return serviceNotificationBuilder.build()
     }
 
-    internal fun setExternalNotification(serviceNotification: ServiceNotification?) {
+    internal fun setExternalNotification(serviceNotification: ServiceNotification) {
         externalNotification = serviceNotification
     }
 

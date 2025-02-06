@@ -118,7 +118,7 @@ public class Pawns private constructor(
             }
             PawnsLogger.isEnabled = isLoggingEnabled
             val pawns = Pawns(this)
-            pawns.init(context)
+            pawns.init(context, serviceType)
             _instance = pawns
         }
     }
@@ -128,7 +128,7 @@ public class Pawns private constructor(
     internal val _serviceState: MutableStateFlow<ServiceState> = MutableStateFlow(ServiceState.Off)
     internal val serviceState: StateFlow<ServiceState> = _serviceState
 
-    private fun init(context: Context) {
+    private fun init(context: Context, serviceType: ServiceType) {
         val deviceId = DeviceIdHelper.id(context)
         val deviceName = SystemUtils.getDeviceNameAndOsVersion()
         if (PawnsCore.isNdkLoaded) {
@@ -137,11 +137,14 @@ public class Pawns private constructor(
             PawnsLogger.e(TAG, "Failed to initialise PawnsNdk")
         }
         dependencyProvider = DependencyProvider(context, serviceConfig)
-
-        if (serviceType == ServiceType.FOREGROUND && serviceNotification == null) {
+        checkHangingForegroundService(context, serviceType)
+        if (this.serviceType == ServiceType.FOREGROUND && serviceNotification == null) {
             dependencyProvider?.notificationManager?.initNotificationChannel()
-        } else {
+            return
+        }
+        if (this.serviceType == ServiceType.FOREGROUND && serviceNotification != null) {
             dependencyProvider?.notificationManager?.setExternalNotification(serviceNotification)
+            return
         }
     }
 
@@ -232,5 +235,13 @@ public class Pawns private constructor(
         }
     }
 
+    private fun checkHangingForegroundService(context: Context, serviceType: ServiceType) {
+        if (SystemUtils.isServiceRunning(context, listOf(PeerServiceForeground::class.java.name))
+            && serviceType == ServiceType.BACKGROUND
+        ) {
+            PeerServiceForeground.performAction(context, ServiceAction.STOP_PAWNS_SERVICE)
+            PawnsLogger.e(TAG, "Foreground service detected, stopping Foreground service")
+        }
+    }
 
 }
