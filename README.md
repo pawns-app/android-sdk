@@ -1,6 +1,7 @@
 # Pawns Android SDK #
 
-![Pawns App](https://pawns.app/wp-content/uploads/2022/12/pawns-app-dark.svg)
+![Pawns App](https://pawns.app/app/uploads/2022/12/pawns-app-dark.svg)
+
 
 ## Internet Sharing Library ##
 
